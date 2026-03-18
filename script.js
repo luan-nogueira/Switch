@@ -2,7 +2,6 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/fireba
 import {
   getAuth,
   onAuthStateChanged,
-  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
   updatePassword
@@ -11,6 +10,7 @@ import {
   getFirestore,
   doc,
   getDoc,
+  setDoc,
   onSnapshot,
   collection,
   query,
@@ -39,157 +39,17 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 
 /* =========================================================
-   HELPERS DE ELEMENTOS
+   HELPERS
 ========================================================= */
 const $ = (id) => document.getElementById(id);
 
-/* =========================================================
-   ELEMENTOS
-========================================================= */
-const authScreen = $("authScreen");
-const appContainer = $("appContainer");
-const authForm = $("authForm");
-const registerBtn = $("registerBtn");
-const logoutBtn = $("logoutBtn");
-const authMessage = $("authMessage");
-const loggedUser = $("loggedUser");
-
-const authEmail = $("authEmail");
-const authPassword = $("authPassword");
-
-const contractSelect = $("contractSelect");
-const searchInput = $("searchInput");
-
-const switchForm = $("switchForm");
-const portForm = $("portForm");
-const portModal = $("portModal");
-
-const changePasswordScreen = $("changePasswordScreen");
-const changePasswordForm = $("changePasswordForm");
-const newPasswordInput = $("newPassword");
-const confirmNewPasswordInput = $("confirmNewPassword");
-const changePasswordMessage = $("changePasswordMessage");
-
-/* =========================================================
-   APP STATE
-========================================================= */
-let currentUser = null;
-let currentUserProfile = null;
-let currentContractId = "";
-let currentContractNameMap = {};
-let switches = [];
-let editingSwitchId = null;
-let editingPortIndex = null;
-let unsubscribeUserProfile = null;
-let unsubscribeSwitches = null;
-let expandedState = {};
-
-/* =========================================================
-   AUTH UI
-========================================================= */
-function setAuthMessage(message, isError = true) {
-  if (!authMessage) return;
-  authMessage.textContent = message;
-  authMessage.className = isError ? "auth-message error" : "auth-message success";
-}
-
-function clearAuthMessage() {
-  if (!authMessage) return;
-  authMessage.textContent = "";
-  authMessage.className = "auth-message";
-}
-
-function setChangePasswordMessage(message, isError = true) {
-  if (!changePasswordMessage) return;
-  changePasswordMessage.textContent = message;
-  changePasswordMessage.className = isError ? "auth-message error" : "auth-message success";
-}
-
-function clearChangePasswordMessage() {
-  if (!changePasswordMessage) return;
-  changePasswordMessage.textContent = "";
-  changePasswordMessage.className = "auth-message";
-}
-
-function hideAllScreens() {
-  if (authScreen) authScreen.classList.add("hidden");
-  if (appContainer) appContainer.classList.add("hidden");
-  if (changePasswordScreen) changePasswordScreen.classList.add("hidden");
-}
-
-function showApp(user) {
-  hideAllScreens();
-  if (appContainer) appContainer.classList.remove("hidden");
-  if (loggedUser) {
-    loggedUser.textContent =
-      currentUserProfile?.name
-        ? `${currentUserProfile.name} (${currentUserProfile.email || user?.email || ""})`
-        : (user?.email || "Usuário autenticado");
-  }
-
-  renderContractOptions();
-  renderSwitches();
-  updateStats();
-}
-
-function showLogin() {
-  hideAllScreens();
-  if (authScreen) authScreen.classList.remove("hidden");
-}
-
-function showChangePasswordScreen() {
-  if (!changePasswordScreen) {
-    showApp(currentUser);
-    return;
-  }
-
-  hideAllScreens();
-  changePasswordScreen.classList.remove("hidden");
-}
-
-function translateFirebaseError(error) {
-  const code = error?.code || "";
-
-  switch (code) {
-    case "auth/invalid-email":
-      return "Email inválido.";
-    case "auth/user-disabled":
-      return "Este usuário foi desativado.";
-    case "auth/user-not-found":
-    case "auth/invalid-credential":
-      return "Email ou senha incorretos.";
-    case "auth/wrong-password":
-      return "Senha incorreta.";
-    case "auth/email-already-in-use":
-      return "Este email já está em uso.";
-    case "auth/weak-password":
-      return "A senha é muito fraca. Use uma senha mais forte.";
-    case "auth/missing-password":
-      return "Digite a senha.";
-    case "auth/too-many-requests":
-      return "Muitas tentativas. Tente novamente em alguns minutos.";
-    case "auth/network-request-failed":
-      return "Erro de rede. Verifique sua conexão.";
-    case "auth/requires-recent-login":
-      return "Por segurança, faça login novamente e tente alterar a senha.";
-    default:
-      return error?.message || "Ocorreu um erro na autenticação.";
-  }
-}
-
-/* =========================================================
-   HELPERS GERAIS
-========================================================= */
-function cleanupListeners() {
-  if (unsubscribeUserProfile) {
-    unsubscribeUserProfile();
-    unsubscribeUserProfile = null;
-  }
-
-  if (unsubscribeSwitches) {
-    unsubscribeSwitches();
-    unsubscribeSwitches = null;
-  }
+function escapeHtml(text) {
+  return String(text || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 function generateId() {
@@ -198,7 +58,6 @@ function generateId() {
 
 function createPorts(total) {
   const ports = [];
-
   for (let i = 1; i <= total; i++) {
     ports.push({
       number: i,
@@ -209,17 +68,7 @@ function createPorts(total) {
       obs: ""
     });
   }
-
   return ports;
-}
-
-function escapeHtml(text) {
-  return String(text || "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
 }
 
 function getStatusClass(status) {
@@ -235,6 +84,173 @@ function formatContractId(id) {
     .split(/[-_\s]+/)
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+}
+
+function setAuthMessage(message, isError = true) {
+  const el = $("authMessage");
+  if (!el) return;
+  el.textContent = message;
+  el.className = isError ? "auth-message error" : "auth-message success";
+}
+
+function clearAuthMessage() {
+  const el = $("authMessage");
+  if (!el) return;
+  el.textContent = "";
+  el.className = "auth-message";
+}
+
+function setChangePasswordMessage(message, isError = true) {
+  const el = $("changePasswordMessage");
+  if (!el) return;
+  el.textContent = message;
+  el.className = isError ? "auth-message error" : "auth-message success";
+}
+
+function clearChangePasswordMessage() {
+  const el = $("changePasswordMessage");
+  if (!el) return;
+  el.textContent = "";
+  el.className = "auth-message";
+}
+
+function setAdminUserMessage(message, isError = true) {
+  const el = $("adminUserMessage");
+  if (!el) return;
+  el.textContent = message;
+  el.className = isError ? "auth-message error" : "auth-message success";
+}
+
+function clearAdminUserMessage() {
+  const el = $("adminUserMessage");
+  if (!el) return;
+  el.textContent = "";
+  el.className = "auth-message";
+}
+
+function hideAllScreens() {
+  $("authScreen")?.classList.add("hidden");
+  $("changePasswordScreen")?.classList.add("hidden");
+  $("appContainer")?.classList.add("hidden");
+}
+
+function showLogin() {
+  hideAllScreens();
+  $("authScreen")?.classList.remove("hidden");
+}
+
+function showChangePasswordScreen() {
+  hideAllScreens();
+  $("changePasswordScreen")?.classList.remove("hidden");
+}
+
+function showApp() {
+  hideAllScreens();
+  $("appContainer")?.classList.remove("hidden");
+}
+
+function translateFirebaseError(error) {
+  const code = error?.code || "";
+
+  switch (code) {
+    case "auth/invalid-email":
+      return "Email inválido.";
+    case "auth/user-disabled":
+      return "Este usuário foi desativado.";
+    case "auth/user-not-found":
+    case "auth/invalid-credential":
+      return "Email ou senha incorretos.";
+    case "auth/wrong-password":
+      return "Senha incorreta.";
+    case "auth/weak-password":
+      return "A senha é muito fraca.";
+    case "auth/missing-password":
+      return "Digite a senha.";
+    case "auth/too-many-requests":
+      return "Muitas tentativas. Tente novamente em alguns minutos.";
+    case "auth/network-request-failed":
+      return "Erro de rede. Verifique sua conexão.";
+    case "auth/requires-recent-login":
+      return "Faça login novamente para alterar a senha.";
+    default:
+      return error?.message || "Ocorreu um erro.";
+  }
+}
+
+/* =========================================================
+   ESTADO
+========================================================= */
+let currentUser = null;
+let currentUserProfile = null;
+let currentContractId = "";
+let currentContractNameMap = {};
+let switches = [];
+let editingSwitchId = null;
+let editingPortIndex = null;
+let unsubscribeUserProfile = null;
+let unsubscribeSwitches = null;
+let expandedState = {};
+
+/* =========================================================
+   LISTENERS CLEANUP
+========================================================= */
+function cleanupListeners() {
+  if (unsubscribeUserProfile) {
+    unsubscribeUserProfile();
+    unsubscribeUserProfile = null;
+  }
+
+  if (unsubscribeSwitches) {
+    unsubscribeSwitches();
+    unsubscribeSwitches = null;
+  }
+}
+
+/* =========================================================
+   CONTRATOS
+========================================================= */
+async function loadContractNames(contractIds) {
+  const map = {};
+
+  await Promise.all(
+    contractIds.map(async (id) => {
+      try {
+        const snap = await getDoc(doc(db, "contracts", id));
+        if (snap.exists()) {
+          map[id] = snap.data().name || formatContractId(id);
+        } else {
+          map[id] = formatContractId(id);
+        }
+      } catch {
+        map[id] = formatContractId(id);
+      }
+    })
+  );
+
+  currentContractNameMap = map;
+}
+
+function renderContractOptions() {
+  const contractSelect = $("contractSelect");
+  if (!contractSelect) return;
+
+  const contracts = Array.isArray(currentUserProfile?.contracts)
+    ? currentUserProfile.contracts
+    : [];
+
+  if (!contracts.length) {
+    contractSelect.innerHTML = `<option value="">Nenhum contrato liberado</option>`;
+    contractSelect.disabled = true;
+    return;
+  }
+
+  contractSelect.disabled = false;
+  contractSelect.innerHTML = contracts.map((contractId) => {
+    const name = currentContractNameMap[contractId] || formatContractId(contractId);
+    return `<option value="${escapeHtml(contractId)}">${escapeHtml(name)}</option>`;
+  }).join("");
+
+  contractSelect.value = currentContractId;
 }
 
 function ensureAllowedContract() {
@@ -260,51 +276,8 @@ function ensureAllowedContract() {
 }
 
 /* =========================================================
-   FIRESTORE - PERFIL / CONTRATOS
+   PERFIL DO USUÁRIO
 ========================================================= */
-async function loadContractNames(contractIds) {
-  const map = {};
-
-  await Promise.all(
-    contractIds.map(async (id) => {
-      try {
-        const snap = await getDoc(doc(db, "contracts", id));
-        if (snap.exists()) {
-          map[id] = snap.data().name || formatContractId(id);
-        } else {
-          map[id] = formatContractId(id);
-        }
-      } catch {
-        map[id] = formatContractId(id);
-      }
-    })
-  );
-
-  currentContractNameMap = map;
-}
-
-function renderContractOptions() {
-  if (!contractSelect) return;
-
-  const contracts = Array.isArray(currentUserProfile?.contracts)
-    ? currentUserProfile.contracts
-    : [];
-
-  if (!contracts.length) {
-    contractSelect.innerHTML = `<option value="">Nenhum contrato liberado</option>`;
-    contractSelect.disabled = true;
-    return;
-  }
-
-  contractSelect.disabled = false;
-  contractSelect.innerHTML = contracts.map((contractId) => {
-    const name = currentContractNameMap[contractId] || formatContractId(contractId);
-    return `<option value="${escapeHtml(contractId)}">${escapeHtml(name)}</option>`;
-  }).join("");
-
-  contractSelect.value = currentContractId;
-}
-
 function subscribeUserProfile(uid) {
   const userRef = doc(db, "users", uid);
 
@@ -320,6 +293,13 @@ function subscribeUserProfile(uid) {
       ...snap.data()
     };
 
+    const loggedUser = $("loggedUser");
+    if (loggedUser) {
+      loggedUser.textContent = currentUserProfile?.name
+        ? `${currentUserProfile.name} (${currentUserProfile.email || currentUser?.email || ""})`
+        : (currentUser?.email || "Usuário autenticado");
+    }
+
     const allowedContracts = Array.isArray(currentUserProfile.contracts)
       ? currentUserProfile.contracts
       : [];
@@ -331,15 +311,18 @@ function subscribeUserProfile(uid) {
       return;
     }
 
-    showApp(currentUser);
+    showApp();
 
-    const hasAccess = ensureAllowedContract();
-    if (!hasAccess) return;
+    const ok = ensureAllowedContract();
+    if (!ok) return;
 
     subscribeSwitches(currentContractId);
   });
 }
 
+/* =========================================================
+   SWITCHES EM TEMPO REAL
+========================================================= */
 function subscribeSwitches(contractId) {
   if (!contractId) {
     switches = [];
@@ -378,113 +361,75 @@ function subscribeSwitches(contractId) {
 }
 
 /* =========================================================
-   AUTH EVENTS
+   AUTH
 ========================================================= */
-if (authForm) {
-  authForm.addEventListener("submit", async function (e) {
-    e.preventDefault();
-    clearAuthMessage();
+$("authForm")?.addEventListener("submit", async function (e) {
+  e.preventDefault();
+  clearAuthMessage();
 
-    const email = authEmail?.value.trim() || "";
-    const password = authPassword?.value || "";
+  const email = $("authEmail")?.value.trim() || "";
+  const password = $("authPassword")?.value || "";
 
-    if (!email || !password) {
-      setAuthMessage("Preencha email e senha.");
-      return;
+  if (!email || !password) {
+    setAuthMessage("Preencha email e senha.");
+    return;
+  }
+
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+    $("authForm")?.reset();
+  } catch (error) {
+    setAuthMessage(translateFirebaseError(error), true);
+  }
+});
+
+$("logoutBtn")?.addEventListener("click", async function () {
+  try {
+    await signOut(auth);
+  } catch (error) {
+    alert("Erro ao sair: " + translateFirebaseError(error));
+  }
+});
+
+$("changePasswordForm")?.addEventListener("submit", async function (e) {
+  e.preventDefault();
+  clearChangePasswordMessage();
+
+  const newPassword = $("newPassword")?.value || "";
+  const confirmPassword = $("confirmNewPassword")?.value || "";
+
+  if (!newPassword || !confirmPassword) {
+    setChangePasswordMessage("Preencha os dois campos.");
+    return;
+  }
+
+  if (newPassword.length < 6) {
+    setChangePasswordMessage("A nova senha precisa ter pelo menos 6 caracteres.");
+    return;
+  }
+
+  if (newPassword !== confirmPassword) {
+    setChangePasswordMessage("As senhas não coincidem.");
+    return;
+  }
+
+  try {
+    await updatePassword(auth.currentUser, newPassword);
+
+    if (currentUser?.uid) {
+      await updateDoc(doc(db, "users", currentUser.uid), {
+        mustChangePassword: false,
+        updatedAt: serverTimestamp()
+      });
     }
 
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-      setAuthMessage("Login realizado com sucesso!", false);
-      authForm.reset();
-    } catch (error) {
-      setAuthMessage(translateFirebaseError(error), true);
-    }
-  });
-}
-
-/* 
-  Mantive esse botão por compatibilidade com seu HTML atual.
-  Mas o ideal é depois remover o cadastro livre e criar usuários só pela área admin.
-*/
-if (registerBtn) {
-  registerBtn.addEventListener("click", async function () {
-    clearAuthMessage();
-
-    const email = authEmail?.value.trim() || "";
-    const password = authPassword?.value || "";
-
-    if (!email || !password) {
-      setAuthMessage("Preencha email e senha para criar a conta.");
-      return;
-    }
-
-    if (password.length < 6) {
-      setAuthMessage("A senha precisa ter pelo menos 6 caracteres.");
-      return;
-    }
-
-    try {
-      await createUserWithEmailAndPassword(auth, email, password);
-      setAuthMessage("Conta criada com sucesso! Agora crie o documento do usuário no Firestore.", false);
-      authForm?.reset();
-    } catch (error) {
-      setAuthMessage(translateFirebaseError(error), true);
-    }
-  });
-}
-
-if (logoutBtn) {
-  logoutBtn.addEventListener("click", async function () {
-    try {
-      await signOut(auth);
-    } catch (error) {
-      alert("Erro ao sair: " + translateFirebaseError(error));
-    }
-  });
-}
-
-if (changePasswordForm) {
-  changePasswordForm.addEventListener("submit", async function (e) {
-    e.preventDefault();
-    clearChangePasswordMessage();
-
-    const newPassword = newPasswordInput?.value || "";
-    const confirmPassword = confirmNewPasswordInput?.value || "";
-
-    if (!newPassword || !confirmPassword) {
-      setChangePasswordMessage("Preencha os dois campos de senha.");
-      return;
-    }
-
-    if (newPassword.length < 6) {
-      setChangePasswordMessage("A nova senha precisa ter pelo menos 6 caracteres.");
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setChangePasswordMessage("As senhas não coincidem.");
-      return;
-    }
-
-    try {
-      await updatePassword(auth.currentUser, newPassword);
-
-      if (currentUser?.uid) {
-        await updateDoc(doc(db, "users", currentUser.uid), {
-          mustChangePassword: false,
-          updatedAt: serverTimestamp()
-        });
-      }
-
-      changePasswordForm.reset();
-      setChangePasswordMessage("Senha alterada com sucesso!", false);
-      showApp(currentUser);
-    } catch (error) {
-      setChangePasswordMessage(translateFirebaseError(error), true);
-    }
-  });
-}
+    $("changePasswordForm")?.reset();
+    setChangePasswordMessage("Senha alterada com sucesso!", false);
+    showApp();
+  } catch (error) {
+    setChangePasswordMessage(translateFirebaseError(error), true);
+  }
+});
 
 onAuthStateChanged(auth, (user) => {
   cleanupListeners();
@@ -504,35 +449,34 @@ onAuthStateChanged(auth, (user) => {
 });
 
 /* =========================================================
-   CONTRATO
+   CONTRATO SELECT
 ========================================================= */
-if (contractSelect) {
-  contractSelect.addEventListener("change", function () {
-    currentContractId = this.value || "";
+$("contractSelect")?.addEventListener("change", function () {
+  currentContractId = this.value || "";
 
-    if (!currentContractId) {
-      switches = [];
-      renderSwitches();
-      updateStats();
-      return;
-    }
+  if (!currentContractId) {
+    switches = [];
+    renderSwitches();
+    updateStats();
+    return;
+  }
 
-    subscribeSwitches(currentContractId);
-  });
-}
+  subscribeSwitches(currentContractId);
+});
+
+/* =========================================================
+   BUSCA
+========================================================= */
+$("searchInput")?.addEventListener("input", renderSwitches);
 
 /* =========================================================
    RENDER
 ========================================================= */
-if (searchInput) {
-  searchInput.addEventListener("input", renderSwitches);
-}
-
 function renderSwitches() {
   const container = $("switchesContainer");
   if (!container) return;
 
-  const search = (searchInput?.value || "").trim().toLowerCase();
+  const search = ($("searchInput")?.value || "").trim().toLowerCase();
 
   if (!currentContractId && currentUserProfile) {
     container.innerHTML = `
@@ -550,7 +494,9 @@ function renderSwitches() {
       sw.location,
       sw.model,
       sw.obs,
-      ...(Array.isArray(sw.ports) ? sw.ports.map(port => `${port.number} ${port.device} ${port.status} ${port.ip} ${port.sector} ${port.obs}`) : [])
+      ...(Array.isArray(sw.ports)
+        ? sw.ports.map(port => `${port.number} ${port.device} ${port.status} ${port.ip} ${port.sector} ${port.obs}`)
+        : [])
     ].join(" ").toLowerCase();
 
     return fullText.includes(search);
@@ -724,14 +670,14 @@ window.openPortModal = function (switchId, portIndex) {
   if ($("portSector")) $("portSector").value = port.sector || "";
   if ($("portObs")) $("portObs").value = port.obs || "";
 
-  portModal?.classList.add("show");
+  $("portModal")?.classList.add("show");
 };
 
 window.closeModal = function () {
-  portModal?.classList.remove("show");
+  $("portModal")?.classList.remove("show");
   editingSwitchId = null;
   editingPortIndex = null;
-  portForm?.reset();
+  $("portForm")?.reset();
 };
 
 window.clearPortData = function () {
@@ -745,92 +691,92 @@ window.clearPortData = function () {
 /* =========================================================
    FORM SWITCH
 ========================================================= */
-if (switchForm) {
-  switchForm.addEventListener("submit", async function (e) {
-    e.preventDefault();
+$("switchForm")?.addEventListener("submit", async function (e) {
+  e.preventDefault();
 
-    if (!currentContractId) {
-      alert("Selecione um contrato.");
-      return;
-    }
+  if (!currentContractId) {
+    alert("Selecione um contrato.");
+    return;
+  }
 
-    const name = $("switchName")?.value.trim() || "";
-    const location = $("switchLocation")?.value.trim() || "";
-    const portsCount = parseInt($("switchPorts")?.value || "24", 10);
-    const model = $("switchModel")?.value.trim() || "";
-    const obs = $("switchObs")?.value.trim() || "";
+  const name = $("switchName")?.value.trim() || "";
+  const location = $("switchLocation")?.value.trim() || "";
+  const portsCount = parseInt($("switchPorts")?.value || "24", 10);
+  const model = $("switchModel")?.value.trim() || "";
+  const obs = $("switchObs")?.value.trim() || "";
 
-    if (!name) {
-      alert("Informe o nome do switch.");
-      return;
-    }
+  if (!name) {
+    alert("Informe o nome do switch.");
+    return;
+  }
 
-    try {
-      await addDoc(collection(db, "contracts", currentContractId, "switches"), {
-        localId: generateId(),
-        name,
-        location,
-        portsCount,
-        model,
-        obs,
-        expanded: false,
-        ports: createPorts(portsCount),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp()
-      });
+  try {
+    await addDoc(collection(db, "contracts", currentContractId, "switches"), {
+      localId: generateId(),
+      name,
+      location,
+      portsCount,
+      model,
+      obs,
+      expanded: false,
+      ports: createPorts(portsCount),
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
 
-      this.reset();
-      if ($("switchPorts")) $("switchPorts").value = "24";
-    } catch (error) {
-      console.error(error);
-      alert("Erro ao salvar switch.");
-    }
-  });
-}
+    this.reset();
+    if ($("switchPorts")) $("switchPorts").value = "24";
+  } catch (error) {
+    console.error(error);
+    alert("Erro ao salvar switch.");
+  }
+});
 
 /* =========================================================
    FORM PORTA
 ========================================================= */
-if (portForm) {
-  portForm.addEventListener("submit", async function (e) {
-    e.preventDefault();
+$("portForm")?.addEventListener("submit", async function (e) {
+  e.preventDefault();
 
-    if (!currentContractId) {
-      alert("Selecione um contrato.");
-      return;
-    }
+  if (!currentContractId) {
+    alert("Selecione um contrato.");
+    return;
+  }
 
-    const sw = switches.find(item => item.id === editingSwitchId);
-    if (!sw) return;
+  const sw = switches.find(item => item.id === editingSwitchId);
+  if (!sw) return;
 
-    const updatedPorts = Array.isArray(sw.ports) ? [...sw.ports] : [];
-    const port = updatedPorts[editingPortIndex];
-    if (!port) return;
+  const updatedPorts = Array.isArray(sw.ports) ? [...sw.ports] : [];
+  const port = updatedPorts[editingPortIndex];
+  if (!port) return;
 
-    port.device = $("portDevice")?.value.trim() || "";
-    port.status = $("portStatus")?.value || "inativo";
-    port.ip = $("portIp")?.value.trim() || "";
-    port.sector = $("portSector")?.value.trim() || "";
-    port.obs = $("portObs")?.value.trim() || "";
+  port.device = $("portDevice")?.value.trim() || "";
+  port.status = $("portStatus")?.value || "inativo";
+  port.ip = $("portIp")?.value.trim() || "";
+  port.sector = $("portSector")?.value.trim() || "";
+  port.obs = $("portObs")?.value.trim() || "";
 
-    try {
-      await updateDoc(doc(db, "contracts", currentContractId, "switches", editingSwitchId), {
-        ports: updatedPorts,
-        updatedAt: serverTimestamp()
-      });
+  try {
+    await updateDoc(doc(db, "contracts", currentContractId, "switches", editingSwitchId), {
+      ports: updatedPorts,
+      updatedAt: serverTimestamp()
+    });
 
-      closeModal();
-    } catch (error) {
-      console.error(error);
-      alert("Erro ao salvar porta.");
-    }
-  });
-}
+    closeModal();
+  } catch (error) {
+    console.error(error);
+    alert("Erro ao salvar porta.");
+  }
+});
 
 /* =========================================================
    IMPORT / EXPORT
 ========================================================= */
-window.exportData = function () {
+$("exportBtn")?.addEventListener("click", exportData);
+$("importBtn")?.addEventListener("click", () => $("importFile")?.click());
+$("importFile")?.addEventListener("change", importData);
+
+function exportData() {
   const payload = {
     contractId: currentContractId,
     contractName: currentContractNameMap[currentContractId] || currentContractId,
@@ -846,9 +792,9 @@ window.exportData = function () {
   link.click();
 
   URL.revokeObjectURL(link.href);
-};
+}
 
-window.importData = async function (event) {
+async function importData(event) {
   const file = event.target.files[0];
   if (!file) return;
 
@@ -906,18 +852,104 @@ window.importData = async function (event) {
   };
 
   reader.readAsText(file);
-};
+}
 
 /* =========================================================
-   MODAL
+   MODAL PORTA
 ========================================================= */
-if (portModal) {
-  portModal.addEventListener("click", function (e) {
-    if (e.target.id === "portModal") {
-      closeModal();
-    }
-  });
+$("portModal")?.addEventListener("click", function (e) {
+  if (e.target.id === "portModal") {
+    closeModal();
+  }
+});
+
+/* =========================================================
+   ADMIN
+========================================================= */
+function isCurrentUserAdmin() {
+  return currentUserProfile?.isAdmin === true;
 }
+
+function openAdminModal() {
+  if (!isCurrentUserAdmin()) {
+    alert("Apenas administradores podem acessar as configurações.");
+    return;
+  }
+
+  clearAdminUserMessage();
+  $("adminModal")?.classList.add("show");
+}
+
+window.closeAdminModal = function () {
+  $("adminModal")?.classList.remove("show");
+  $("adminUserForm")?.reset();
+  clearAdminUserMessage();
+};
+
+$("adminBtn")?.addEventListener("click", openAdminModal);
+
+$("adminModal")?.addEventListener("click", function (e) {
+  if (e.target.id === "adminModal") {
+    closeAdminModal();
+  }
+});
+
+$("adminUserForm")?.addEventListener("submit", async function (e) {
+  e.preventDefault();
+
+  if (!isCurrentUserAdmin()) {
+    setAdminUserMessage("Apenas administradores podem cadastrar usuários.");
+    return;
+  }
+
+  clearAdminUserMessage();
+
+  const name = $("adminUserName")?.value.trim() || "";
+  const email = $("adminUserEmail")?.value.trim() || "";
+  const password = $("adminUserPassword")?.value || "";
+  const isAdmin = $("adminUserIsAdmin")?.value === "true";
+  const mustChangePassword = $("adminMustChangePassword")?.value === "true";
+
+  const contracts = Array.from(document.querySelectorAll(".admin-contract-check:checked"))
+    .map(input => input.value);
+
+  if (!name || !email || !password) {
+    setAdminUserMessage("Preencha nome, email e senha inicial.");
+    return;
+  }
+
+  if (!contracts.length) {
+    setAdminUserMessage("Selecione ao menos um contrato.");
+    return;
+  }
+
+  try {
+    const fakeUid = `pending_${generateId()}`;
+
+    await setDoc(doc(db, "users", fakeUid), {
+      name,
+      email,
+      isAdmin,
+      mustChangePassword,
+      contracts,
+      tempPassword: password,
+      status: "pending-auth-creation",
+      createdBy: currentUser?.uid || null,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    setAdminUserMessage(
+      "Cadastro salvo no Firestore com sucesso. Próximo passo: criar esse usuário no Firebase Authentication.",
+      false
+    );
+
+    this.reset();
+  } catch (error) {
+    console.error(error);
+    setAdminUserMessage("Erro ao salvar cadastro do usuário.");
+  }
+});
 
 /* =========================================================
    INÍCIO
