@@ -9,7 +9,40 @@
 <body>
   <div class="app-bg"></div>
 
-  <div class="container">
+  <!-- TELA DE LOGIN -->
+  <section id="authScreen" class="auth-screen">
+    <div class="auth-card">
+      <div class="auth-brand">
+        <div class="brand-icon">SW</div>
+        <div>
+          <h1>Acesso ao sistema</h1>
+          <p>Entre com seu email e senha para acessar o mapeamento de switches</p>
+        </div>
+      </div>
+
+      <form id="authForm" class="auth-form">
+        <div class="field">
+          <label for="authEmail">Email</label>
+          <input type="email" id="authEmail" placeholder="seuemail@empresa.com" required />
+        </div>
+
+        <div class="field">
+          <label for="authPassword">Senha</label>
+          <input type="password" id="authPassword" placeholder="Digite sua senha" required />
+        </div>
+
+        <div class="auth-actions">
+          <button type="submit" class="btn btn-primary btn-full">Entrar</button>
+          <button type="button" id="registerBtn" class="btn btn-outline btn-full">Criar conta</button>
+        </div>
+
+        <p id="authMessage" class="auth-message"></p>
+      </form>
+    </div>
+  </section>
+
+  <!-- APP -->
+  <div class="container hidden" id="appContainer">
     <header class="topbar">
       <div class="brand">
         <div class="brand-icon">SW</div>
@@ -20,8 +53,12 @@
       </div>
 
       <div class="topbar-actions">
+        <div class="user-box">
+          <span id="loggedUser">Usuário</span>
+        </div>
         <button class="btn btn-outline" onclick="exportData()">Exportar Backup</button>
         <button class="btn btn-outline" onclick="document.getElementById('importFile').click()">Importar Backup</button>
+        <button class="btn btn-danger" id="logoutBtn">Sair</button>
         <input type="file" id="importFile" accept=".json" hidden onchange="importData(event)" />
       </div>
     </header>
@@ -165,6 +202,6 @@
     </div>
   </div>
 
-  <script src="script.js"></script>
+  <script type="module" src="script.js"></script>
 </body>
 </html>
