@@ -1,7 +1,164 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-app.js";
+import {
+  getAuth,
+  onAuthStateChanged,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  signOut
+} from "https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js";
+
+/* =========================================================
+   FIREBASE
+========================================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyCeiZSLoTFyGEyOFTLcH4FCPJI_-YV8pmM",
+  authDomain: "switchs-f8ca3.firebaseapp.com",
+  projectId: "switchs-f8ca3",
+  storageBucket: "switchs-f8ca3.firebasestorage.app",
+  messagingSenderId: "24056268906",
+  appId: "1:24056268906:web:d07426f51252c20d95e213"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+
+/* =========================================================
+   APP STATE
+========================================================= */
 let switches = JSON.parse(localStorage.getItem("switchMappingDataV2")) || [];
 let editingSwitchId = null;
 let editingPortIndex = null;
 
+const authScreen = document.getElementById("authScreen");
+const appContainer = document.getElementById("appContainer");
+const authForm = document.getElementById("authForm");
+const registerBtn = document.getElementById("registerBtn");
+const logoutBtn = document.getElementById("logoutBtn");
+const authMessage = document.getElementById("authMessage");
+const loggedUser = document.getElementById("loggedUser");
+
+/* =========================================================
+   AUTH UI
+========================================================= */
+function setAuthMessage(message, isError = true) {
+  authMessage.textContent = message;
+  authMessage.className = isError ? "auth-message error" : "auth-message success";
+}
+
+function clearAuthMessage() {
+  authMessage.textContent = "";
+  authMessage.className = "auth-message";
+}
+
+function showApp(user) {
+  authScreen.classList.add("hidden");
+  appContainer.classList.remove("hidden");
+  loggedUser.textContent = user?.email || "Usuário autenticado";
+  renderSwitches();
+  updateStats();
+}
+
+function showLogin() {
+  appContainer.classList.add("hidden");
+  authScreen.classList.remove("hidden");
+}
+
+function translateFirebaseError(error) {
+  const code = error?.code || "";
+
+  switch (code) {
+    case "auth/invalid-email":
+      return "Email inválido.";
+    case "auth/user-disabled":
+      return "Este usuário foi desativado.";
+    case "auth/user-not-found":
+    case "auth/invalid-credential":
+      return "Email ou senha incorretos.";
+    case "auth/wrong-password":
+      return "Senha incorreta.";
+    case "auth/email-already-in-use":
+      return "Este email já está em uso.";
+    case "auth/weak-password":
+      return "A senha é muito fraca. Use uma senha mais forte.";
+    case "auth/missing-password":
+      return "Digite a senha.";
+    case "auth/too-many-requests":
+      return "Muitas tentativas. Tente novamente em alguns minutos.";
+    case "auth/network-request-failed":
+      return "Erro de rede. Verifique sua conexão.";
+    default:
+      return error?.message || "Ocorreu um erro na autenticação.";
+  }
+}
+
+/* =========================================================
+   AUTH EVENTS
+========================================================= */
+authForm.addEventListener("submit", async function (e) {
+  e.preventDefault();
+  clearAuthMessage();
+
+  const email = document.getElementById("authEmail").value.trim();
+  const password = document.getElementById("authPassword").value;
+
+  if (!email || !password) {
+    setAuthMessage("Preencha email e senha.");
+    return;
+  }
+
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+    setAuthMessage("Login realizado com sucesso!", false);
+    authForm.reset();
+  } catch (error) {
+    setAuthMessage(translateFirebaseError(error), true);
+  }
+});
+
+registerBtn.addEventListener("click", async function () {
+  clearAuthMessage();
+
+  const email = document.getElementById("authEmail").value.trim();
+  const password = document.getElementById("authPassword").value;
+
+  if (!email || !password) {
+    setAuthMessage("Preencha email e senha para criar a conta.");
+    return;
+  }
+
+  if (password.length < 6) {
+    setAuthMessage("A senha precisa ter pelo menos 6 caracteres.");
+    return;
+  }
+
+  try {
+    await createUserWithEmailAndPassword(auth, email, password);
+    setAuthMessage("Conta criada com sucesso!", false);
+    authForm.reset();
+  } catch (error) {
+    setAuthMessage(translateFirebaseError(error), true);
+  }
+});
+
+logoutBtn.addEventListener("click", async function () {
+  try {
+    await signOut(auth);
+  } catch (error) {
+    alert("Erro ao sair: " + translateFirebaseError(error));
+  }
+});
+
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    showApp(user);
+  } else {
+    showLogin();
+  }
+});
+
+/* =========================================================
+   DADOS
+========================================================= */
 function saveData() {
   localStorage.setItem("switchMappingDataV2", JSON.stringify(switches));
 }
@@ -58,14 +215,14 @@ function getStatusClass(status) {
   return "status-inativo";
 }
 
-function toggleSwitch(id) {
+window.toggleSwitch = function (id) {
   const sw = switches.find(item => item.id === id);
   if (!sw) return;
 
   sw.expanded = !sw.expanded;
   saveData();
   renderSwitches();
-}
+};
 
 function renderSwitches() {
   const container = document.getElementById("switchesContainer");
@@ -151,7 +308,7 @@ function renderSwitches() {
   }).join("");
 }
 
-function editSwitch(id) {
+window.editSwitch = function (id) {
   const sw = switches.find(item => item.id === id);
   if (!sw) return;
 
@@ -175,9 +332,9 @@ function editSwitch(id) {
   saveData();
   renderSwitches();
   updateStats();
-}
+};
 
-function deleteSwitch(id) {
+window.deleteSwitch = function (id) {
   const sw = switches.find(item => item.id === id);
   if (!sw) return;
 
@@ -188,9 +345,9 @@ function deleteSwitch(id) {
   saveData();
   renderSwitches();
   updateStats();
-}
+};
 
-function openPortModal(switchId, portIndex) {
+window.openPortModal = function (switchId, portIndex) {
   editingSwitchId = switchId;
   editingPortIndex = portIndex;
 
@@ -208,22 +365,22 @@ function openPortModal(switchId, portIndex) {
   document.getElementById("portObs").value = port.obs || "";
 
   document.getElementById("portModal").classList.add("show");
-}
+};
 
-function closeModal() {
+window.closeModal = function () {
   document.getElementById("portModal").classList.remove("show");
   editingSwitchId = null;
   editingPortIndex = null;
   document.getElementById("portForm").reset();
-}
+};
 
-function clearPortData() {
+window.clearPortData = function () {
   document.getElementById("portDevice").value = "";
   document.getElementById("portStatus").value = "inativo";
   document.getElementById("portIp").value = "";
   document.getElementById("portSector").value = "";
   document.getElementById("portObs").value = "";
-}
+};
 
 document.getElementById("switchForm").addEventListener("submit", function (e) {
   e.preventDefault();
@@ -279,7 +436,7 @@ document.getElementById("portForm").addEventListener("submit", function (e) {
   closeModal();
 });
 
-function exportData() {
+window.exportData = function () {
   const blob = new Blob([JSON.stringify(switches, null, 2)], { type: "application/json" });
   const link = document.createElement("a");
 
@@ -288,9 +445,9 @@ function exportData() {
   link.click();
 
   URL.revokeObjectURL(link.href);
-}
+};
 
-function importData(event) {
+window.importData = function (event) {
   const file = event.target.files[0];
   if (!file) return;
 
@@ -325,7 +482,7 @@ function importData(event) {
   };
 
   reader.readAsText(file);
-}
+};
 
 document.getElementById("portModal").addEventListener("click", function (e) {
   if (e.target.id === "portModal") {
