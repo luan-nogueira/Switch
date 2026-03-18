@@ -75,6 +75,9 @@
 
         <span id="loggedUser"></span>
 
+        <!-- BOTÃO CONFIG -->
+        <button class="btn btn-outline" id="adminBtn" title="Configurações">⚙️</button>
+
         <button class="btn btn-outline" id="exportBtn">Exportar</button>
         <button class="btn btn-outline" id="importBtn">Importar</button>
         <button class="btn btn-danger" id="logoutBtn">Sair</button>
@@ -117,7 +120,7 @@
 
   </div>
 
-  <!-- MODAL -->
+  <!-- MODAL PORTA -->
   <div class="modal" id="portModal">
     <div class="modal-content">
 
@@ -144,17 +147,48 @@
     </div>
   </div>
 
-  <!-- IMPORT / EXPORT -->
-  <script>
-    document.getElementById("exportBtn").onclick = exportData;
+  <!-- MODAL ADMIN -->
+  <div class="modal" id="adminModal">
+    <div class="modal-content">
 
-    document.getElementById("importBtn").onclick = () => {
-      document.getElementById("importFile").click();
-    };
+      <h3>Gerenciar usuários</h3>
 
-    document.getElementById("importFile").onchange = importData;
-  </script>
+      <form id="adminUserForm">
 
+        <input id="adminUserName" placeholder="Nome" required />
+        <input id="adminUserEmail" placeholder="Email" required />
+        <input id="adminUserPassword" placeholder="Senha inicial" required />
+
+        <select id="adminUserIsAdmin">
+          <option value="false">Usuário</option>
+          <option value="true">Administrador</option>
+        </select>
+
+        <label>Contratos</label>
+
+        <div class="contracts-checks">
+          <label><input type="checkbox" value="ferroport" class="admin-contract-check"> Ferroport</label>
+          <label><input type="checkbox" value="nov" class="admin-contract-check"> Nov</label>
+          <label><input type="checkbox" value="vast" class="admin-contract-check"> Vast</label>
+        </div>
+
+        <select id="adminMustChangePassword">
+          <option value="true">Trocar senha no primeiro login</option>
+          <option value="false">Não exigir troca</option>
+        </select>
+
+        <button type="submit" class="btn btn-primary">Criar usuário</button>
+        <button type="button" onclick="closeAdminModal()">Fechar</button>
+
+        <p id="adminUserMessage"></p>
+
+      </form>
+
+    </div>
+  </div>
+
+  <!-- SCRIPT -->
   <script type="module" src="script.js"></script>
+
 </body>
 </html>
