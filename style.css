@@ -1478,3 +1478,84 @@ textarea {
     font-size: 22px;
   }
 }
+/* ===================== ADMIN / CONFIG ===================== */
+#adminBtn {
+  min-width: 46px;
+  height: 46px;
+  padding: 0 14px;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.contracts-checks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  padding: 6px 0 4px;
+}
+
+.contracts-checks label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.contracts-checks input[type="checkbox"] {
+  width: auto;
+  accent-color: var(--primary);
+}
+
+.admin-note {
+  margin-top: 16px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1px solid var(--border-soft);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+#adminUserMessage {
+  min-height: 22px;
+}
+
+#changePasswordForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+#changePasswordForm input {
+  width: 100%;
+}
+
+#changePasswordForm button {
+  width: 100%;
+}
+
+#adminUserForm {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+
+#adminUserForm .field.full {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 760px) {
+  #adminUserForm {
+    grid-template-columns: 1fr;
+  }
+}
