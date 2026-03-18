@@ -2,33 +2,34 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mapeamento de Switches - Profissional V2</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Mapeamento de Portas de Switch</title>
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
   <div class="app-bg"></div>
 
-  <!-- TELA DE LOGIN -->
+  <!-- LOGIN -->
   <section id="authScreen" class="auth-screen">
     <div class="auth-card">
       <div class="auth-brand">
         <div class="brand-icon">SW</div>
         <div>
           <h1>Acesso ao sistema</h1>
-          <p>Entre com seu email e senha para acessar o mapeamento de switches</p>
+          <p>Entre com seu email e senha.</p>
         </div>
       </div>
 
       <form id="authForm" class="auth-form">
         <div class="field">
-          <label for="authEmail">Email</label>
-          <input type="email" id="authEmail" placeholder="seuemail@empresa.com" required />
+          <label>Email</label>
+          <input type="email" id="authEmail" required />
         </div>
 
         <div class="field">
-          <label for="authPassword">Senha</label>
-          <input type="password" id="authPassword" placeholder="Digite sua senha" required />
+          <label>Senha</label>
+          <input type="password" id="authPassword" required />
         </div>
 
         <div class="auth-actions">
@@ -41,166 +42,118 @@
     </div>
   </section>
 
+  <!-- TROCA SENHA -->
+  <section id="changePasswordScreen" class="auth-screen hidden">
+    <div class="auth-card">
+      <h2>Trocar senha</h2>
+
+      <form id="changePasswordForm">
+        <input id="newPassword" type="password" placeholder="Nova senha" required />
+        <input id="confirmNewPassword" type="password" placeholder="Confirmar senha" required />
+
+        <button type="submit" class="btn btn-primary btn-full">Salvar</button>
+
+        <p id="changePasswordMessage"></p>
+      </form>
+    </div>
+  </section>
+
   <!-- APP -->
   <div class="container hidden" id="appContainer">
+
     <header class="topbar">
       <div class="brand">
         <div class="brand-icon">SW</div>
         <div>
           <h1>Mapeamento de Portas de Switch</h1>
-          <p>Controle interno de switches, portas e dispositivos conectados</p>
+          <p>Sistema profissional</p>
         </div>
       </div>
 
       <div class="topbar-actions">
-        <div class="user-box">
-          <span id="loggedUser">Usuário</span>
-        </div>
-        <button class="btn btn-outline" onclick="exportData()">Exportar Backup</button>
-        <button class="btn btn-outline" onclick="document.getElementById('importFile').click()">Importar Backup</button>
+        <select id="contractSelect"></select>
+
+        <span id="loggedUser"></span>
+
+        <button class="btn btn-outline" id="exportBtn">Exportar</button>
+        <button class="btn btn-outline" id="importBtn">Importar</button>
         <button class="btn btn-danger" id="logoutBtn">Sair</button>
-        <input type="file" id="importFile" accept=".json" hidden onchange="importData(event)" />
+
+        <input type="file" id="importFile" hidden />
       </div>
     </header>
 
-    <section class="dashboard">
-      <div class="panel form-panel">
-        <div class="panel-header">
-          <h2>Cadastrar novo switch</h2>
-          <span class="panel-badge">Novo cadastro</span>
-        </div>
+    <!-- FORM -->
+    <form id="switchForm" class="form-grid">
+      <input id="switchName" placeholder="Nome do switch" required />
+      <input id="switchLocation" placeholder="Local" />
+      <input id="switchModel" placeholder="Modelo" />
 
-        <form id="switchForm" class="form-grid">
-          <div class="field">
-            <label for="switchName">Nome do switch</label>
-            <input type="text" id="switchName" placeholder="Ex: Switch Poste 20" required />
-          </div>
+      <select id="switchPorts">
+        <option value="8">8</option>
+        <option value="16">16</option>
+        <option value="24" selected>24</option>
+        <option value="48">48</option>
+      </select>
 
-          <div class="field">
-            <label for="switchLocation">Local</label>
-            <input type="text" id="switchLocation" placeholder="Ex: Poste 20 / Rack A / Sala TI" />
-          </div>
+      <textarea id="switchObs" placeholder="Observações"></textarea>
 
-          <div class="field">
-            <label for="switchPorts">Quantidade de portas</label>
-            <select id="switchPorts">
-              <option value="8">8 portas</option>
-              <option value="16">16 portas</option>
-              <option value="24" selected>24 portas</option>
-              <option value="48">48 portas</option>
-            </select>
-          </div>
+      <button type="submit" class="btn btn-primary">Salvar</button>
+    </form>
 
-          <div class="field">
-            <label for="switchModel">Modelo</label>
-            <input type="text" id="switchModel" placeholder="Ex: Intelbras / Cisco / TP-Link" />
-          </div>
+    <!-- BUSCA -->
+    <input id="searchInput" placeholder="Buscar..." />
 
-          <div class="field full">
-            <label for="switchObs">Observação</label>
-            <textarea id="switchObs" placeholder="Observações gerais do switch..."></textarea>
-          </div>
+    <!-- STATS -->
+    <div>
+      <strong id="statSwitches"></strong>
+      <strong id="statPorts"></strong>
+      <strong id="statUsed"></strong>
+      <strong id="statFree"></strong>
+    </div>
 
-          <div class="field full">
-            <button type="submit" class="btn btn-primary btn-full">Salvar switch</button>
-          </div>
-        </form>
-      </div>
+    <!-- LISTA -->
+    <div id="switchesContainer"></div>
 
-      <div class="panel stats-panel">
-        <div class="panel-header">
-          <h2>Resumo geral</h2>
-          <span class="panel-badge badge-dark">Painel</span>
-        </div>
-
-        <div class="stats-grid">
-          <div class="stat-card">
-            <span>Total de switches</span>
-            <strong id="statSwitches">0</strong>
-          </div>
-
-          <div class="stat-card">
-            <span>Total de portas</span>
-            <strong id="statPorts">0</strong>
-          </div>
-
-          <div class="stat-card">
-            <span>Portas em uso</span>
-            <strong id="statUsed">0</strong>
-          </div>
-
-          <div class="stat-card">
-            <span>Livres / reserva</span>
-            <strong id="statFree">0</strong>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section class="search-section">
-      <div class="search-box">
-        <input
-          type="text"
-          id="searchInput"
-          placeholder="Buscar por switch, porta, dispositivo, setor, IP, modelo ou observação..."
-          oninput="renderSwitches()"
-        />
-      </div>
-    </section>
-
-    <section id="switchesContainer" class="switch-list"></section>
-
-    <footer class="footer-note">
-      Dados salvos automaticamente no navegador.
-    </footer>
   </div>
 
+  <!-- MODAL -->
   <div class="modal" id="portModal">
     <div class="modal-content">
-      <div class="modal-header">
-        <h3 id="modalTitle">Editar porta</h3>
-        <button class="close-btn" onclick="closeModal()">&times;</button>
-      </div>
 
-      <div class="modal-body">
-        <form id="portForm" class="form-grid">
-          <div class="field">
-            <label for="portDevice">Dispositivo conectado</label>
-            <input type="text" id="portDevice" placeholder="Ex: Câmera 01 / Access Point / PC Recepção" />
-          </div>
+      <h3 id="modalTitle"></h3>
 
-          <div class="field">
-            <label for="portStatus">Status</label>
-            <select id="portStatus">
-              <option value="ativo">Ativo</option>
-              <option value="reserva">Reserva</option>
-              <option value="inativo">Inativo</option>
-            </select>
-          </div>
+      <form id="portForm">
+        <input id="portDevice" placeholder="Dispositivo" />
 
-          <div class="field">
-            <label for="portIp">IP / VLAN / Identificação</label>
-            <input type="text" id="portIp" placeholder="Ex: 192.168.0.10 / VLAN 20" />
-          </div>
+        <select id="portStatus">
+          <option value="ativo">Ativo</option>
+          <option value="reserva">Reserva</option>
+          <option value="inativo">Inativo</option>
+        </select>
 
-          <div class="field">
-            <label for="portSector">Setor / Destino</label>
-            <input type="text" id="portSector" placeholder="Ex: Recepção / Sala de crise / Poste 20" />
-          </div>
+        <input id="portIp" placeholder="IP" />
+        <input id="portSector" placeholder="Setor" />
+        <textarea id="portObs"></textarea>
 
-          <div class="field full">
-            <label for="portObs">Observações</label>
-            <textarea id="portObs" placeholder="Informações extras da porta..."></textarea>
-          </div>
+        <button type="submit" class="btn btn-primary">Salvar</button>
+        <button type="button" onclick="clearPortData()">Limpar</button>
+        <button type="button" onclick="closeModal()">Fechar</button>
+      </form>
 
-          <div class="field full actions-row">
-            <button type="submit" class="btn btn-primary">Salvar porta</button>
-            <button type="button" class="btn btn-outline" onclick="clearPortData()">Limpar campos</button>
-          </div>
-        </form>
-      </div>
     </div>
   </div>
+
+  <!-- IMPORT / EXPORT -->
+  <script>
+    document.getElementById("exportBtn").onclick = exportData;
+
+    document.getElementById("importBtn").onclick = () => {
+      document.getElementById("importFile").click();
+    };
+
+    document.getElementById("importFile").onchange = importData;
+  </script>
 
   <script type="module" src="script.js"></script>
 </body>
