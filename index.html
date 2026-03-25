@@ -73,11 +73,9 @@
       <div class="topbar-actions">
         <select id="contractSelect"></select>
 
-        <span id="loggedUser"></span>
+        <span id="loggedUser" class="user-box"></span>
 
-        <!-- BOTÃO CONFIG -->
         <button class="btn btn-outline" id="adminBtn" title="Configurações">⚙️</button>
-
         <button class="btn btn-outline" id="exportBtn">Exportar</button>
         <button class="btn btn-outline" id="importBtn">Importar</button>
         <button class="btn btn-danger" id="logoutBtn">Sair</button>
@@ -108,11 +106,11 @@
     <input id="searchInput" placeholder="Buscar..." />
 
     <!-- STATS -->
-    <div>
-      <strong id="statSwitches"></strong>
-      <strong id="statPorts"></strong>
-      <strong id="statUsed"></strong>
-      <strong id="statFree"></strong>
+    <div class="stats-inline">
+      <strong>Switches: <span id="statSwitches">0</span></strong>
+      <strong>Portas: <span id="statPorts">0</span></strong>
+      <strong>Em uso: <span id="statUsed">0</span></strong>
+      <strong>Livres: <span id="statFree">0</span></strong>
     </div>
 
     <!-- LISTA -->
@@ -123,72 +121,102 @@
   <!-- MODAL PORTA -->
   <div class="modal" id="portModal">
     <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modalTitle"></h3>
+        <button type="button" class="close-btn" onclick="closeModal()">×</button>
+      </div>
 
-      <h3 id="modalTitle"></h3>
+      <div class="modal-body">
+        <form id="portForm" class="modal-form">
+          <input id="portDevice" placeholder="Dispositivo" />
 
-      <form id="portForm">
-        <input id="portDevice" placeholder="Dispositivo" />
+          <select id="portStatus">
+            <option value="ativo">Ativo</option>
+            <option value="reserva">Reserva</option>
+            <option value="inativo">Inativo</option>
+          </select>
 
-        <select id="portStatus">
-          <option value="ativo">Ativo</option>
-          <option value="reserva">Reserva</option>
-          <option value="inativo">Inativo</option>
-        </select>
+          <input id="portIp" placeholder="IP" />
+          <input id="portSector" placeholder="Setor" />
+          <textarea id="portObs" placeholder="Observações"></textarea>
 
-        <input id="portIp" placeholder="IP" />
-        <input id="portSector" placeholder="Setor" />
-        <textarea id="portObs"></textarea>
+          <div class="actions-row">
+            <button type="submit" class="btn btn-primary">Salvar</button>
+            <button type="button" class="btn btn-outline" onclick="clearPortData()">Limpar</button>
+            <button type="button" class="btn btn-danger" onclick="closeModal()">Fechar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
 
-        <button type="submit" class="btn btn-primary">Salvar</button>
-        <button type="button" onclick="clearPortData()">Limpar</button>
-        <button type="button" onclick="closeModal()">Fechar</button>
-      </form>
+  <!-- MODAL EDITAR SWITCH -->
+  <div class="modal" id="editSwitchModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Editar switch</h3>
+        <button type="button" class="close-btn" onclick="closeEditSwitchModal()">×</button>
+      </div>
 
+      <div class="modal-body">
+        <form id="editSwitchForm" class="modal-form">
+          <input id="editSwitchName" placeholder="Nome do switch" required />
+          <input id="editSwitchLocation" placeholder="Local" />
+          <input id="editSwitchModel" placeholder="Modelo" />
+          <textarea id="editSwitchObs" placeholder="Observações"></textarea>
+
+          <div class="actions-row">
+            <button type="submit" class="btn btn-primary">Salvar alterações</button>
+            <button type="button" class="btn btn-danger" onclick="closeEditSwitchModal()">Fechar</button>
+          </div>
+        </form>
+      </div>
     </div>
   </div>
 
   <!-- MODAL ADMIN -->
   <div class="modal" id="adminModal">
     <div class="modal-content">
+      <div class="modal-header">
+        <h3>Gerenciar usuários</h3>
+        <button type="button" class="close-btn" onclick="closeAdminModal()">×</button>
+      </div>
 
-      <h3>Gerenciar usuários</h3>
+      <div class="modal-body">
+        <form id="adminUserForm" class="modal-form">
+          <input id="adminUserName" placeholder="Nome" required />
+          <input id="adminUserEmail" placeholder="Email" required />
+          <input id="adminUserPassword" placeholder="Senha inicial" required />
 
-      <form id="adminUserForm">
+          <select id="adminUserIsAdmin">
+            <option value="false">Usuário</option>
+            <option value="true">Administrador</option>
+          </select>
 
-        <input id="adminUserName" placeholder="Nome" required />
-        <input id="adminUserEmail" placeholder="Email" required />
-        <input id="adminUserPassword" placeholder="Senha inicial" required />
+          <label>Contratos</label>
 
-        <select id="adminUserIsAdmin">
-          <option value="false">Usuário</option>
-          <option value="true">Administrador</option>
-        </select>
+          <div class="contracts-checks">
+            <label><input type="checkbox" value="ferroport" class="admin-contract-check"> Ferroport</label>
+            <label><input type="checkbox" value="nov" class="admin-contract-check"> Nov</label>
+            <label><input type="checkbox" value="vast" class="admin-contract-check"> Vast</label>
+          </div>
 
-        <label>Contratos</label>
+          <select id="adminMustChangePassword">
+            <option value="true">Trocar senha no primeiro login</option>
+            <option value="false">Não exigir troca</option>
+          </select>
 
-        <div class="contracts-checks">
-          <label><input type="checkbox" value="ferroport" class="admin-contract-check"> Ferroport</label>
-          <label><input type="checkbox" value="nov" class="admin-contract-check"> Nov</label>
-          <label><input type="checkbox" value="vast" class="admin-contract-check"> Vast</label>
-        </div>
+          <div class="actions-row">
+            <button type="submit" class="btn btn-primary">Criar usuário</button>
+            <button type="button" class="btn btn-danger" onclick="closeAdminModal()">Fechar</button>
+          </div>
 
-        <select id="adminMustChangePassword">
-          <option value="true">Trocar senha no primeiro login</option>
-          <option value="false">Não exigir troca</option>
-        </select>
-
-        <button type="submit" class="btn btn-primary">Criar usuário</button>
-        <button type="button" onclick="closeAdminModal()">Fechar</button>
-
-        <p id="adminUserMessage"></p>
-
-      </form>
-
+          <p id="adminUserMessage"></p>
+        </form>
+      </div>
     </div>
   </div>
 
-  <!-- SCRIPT -->
   <script type="module" src="script.js"></script>
-
 </body>
 </html>
