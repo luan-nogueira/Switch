@@ -187,6 +187,7 @@ let currentContractNameMap = {};
 let switches = [];
 let editingSwitchId = null;
 let editingPortIndex = null;
+let switchEditingId = null;
 let unsubscribeUserProfile = null;
 let unsubscribeSwitches = null;
 let expandedState = {};
@@ -440,6 +441,9 @@ onAuthStateChanged(auth, (user) => {
   currentContractNameMap = {};
   switches = [];
   expandedState = {};
+  switchEditingId = null;
+  editingSwitchId = null;
+  editingPortIndex = null;
 
   if (user) {
     subscribeUserProfile(user.uid);
@@ -597,7 +601,7 @@ window.toggleSwitch = function (id) {
   renderSwitches();
 };
 
-window.editSwitch = async function (id) {
+window.editSwitch = function (id) {
   if (!currentContractId) {
     alert("Selecione um contrato.");
     return;
@@ -606,30 +610,20 @@ window.editSwitch = async function (id) {
   const sw = switches.find(item => item.id === id);
   if (!sw) return;
 
-  const newName = prompt("Novo nome do switch:", sw.name);
-  if (newName === null) return;
+  switchEditingId = id;
 
-  const newLocation = prompt("Novo local do switch:", sw.location || "");
-  if (newLocation === null) return;
+  if ($("editSwitchName")) $("editSwitchName").value = sw.name || "";
+  if ($("editSwitchLocation")) $("editSwitchLocation").value = sw.location || "";
+  if ($("editSwitchModel")) $("editSwitchModel").value = sw.model || "";
+  if ($("editSwitchObs")) $("editSwitchObs").value = sw.obs || "";
 
-  const newModel = prompt("Novo modelo do switch:", sw.model || "");
-  if (newModel === null) return;
+  $("editSwitchModal")?.classList.add("show");
+};
 
-  const newObs = prompt("Nova observação do switch:", sw.obs || "");
-  if (newObs === null) return;
-
-  try {
-    await updateDoc(doc(db, "contracts", currentContractId, "switches", id), {
-      name: newName.trim() || sw.name,
-      location: newLocation.trim(),
-      model: newModel.trim(),
-      obs: newObs.trim(),
-      updatedAt: serverTimestamp()
-    });
-  } catch (error) {
-    console.error(error);
-    alert("Erro ao editar switch.");
-  }
+window.closeEditSwitchModal = function () {
+  $("editSwitchModal")?.classList.remove("show");
+  $("editSwitchForm")?.reset();
+  switchEditingId = null;
 };
 
 window.deleteSwitch = async function (id) {
@@ -729,6 +723,54 @@ $("switchForm")?.addEventListener("submit", async function (e) {
   } catch (error) {
     console.error(error);
     alert("Erro ao salvar switch.");
+  }
+});
+
+/* =========================================================
+   FORM EDITAR SWITCH
+========================================================= */
+$("editSwitchForm")?.addEventListener("submit", async function (e) {
+  e.preventDefault();
+
+  if (!currentContractId) {
+    alert("Selecione um contrato.");
+    return;
+  }
+
+  if (!switchEditingId) {
+    alert("Nenhum switch selecionado para edição.");
+    return;
+  }
+
+  const sw = switches.find(item => item.id === switchEditingId);
+  if (!sw) {
+    alert("Switch não encontrado.");
+    return;
+  }
+
+  const name = $("editSwitchName")?.value.trim() || "";
+  const location = $("editSwitchLocation")?.value.trim() || "";
+  const model = $("editSwitchModel")?.value.trim() || "";
+  const obs = $("editSwitchObs")?.value.trim() || "";
+
+  if (!name) {
+    alert("Informe o nome do switch.");
+    return;
+  }
+
+  try {
+    await updateDoc(doc(db, "contracts", currentContractId, "switches", switchEditingId), {
+      name,
+      location,
+      model,
+      obs,
+      updatedAt: serverTimestamp()
+    });
+
+    closeEditSwitchModal();
+  } catch (error) {
+    console.error(error);
+    alert("Erro ao editar switch.");
   }
 });
 
@@ -855,11 +897,17 @@ async function importData(event) {
 }
 
 /* =========================================================
-   MODAL PORTA
+   MODAIS
 ========================================================= */
 $("portModal")?.addEventListener("click", function (e) {
   if (e.target.id === "portModal") {
     closeModal();
+  }
+});
+
+$("editSwitchModal")?.addEventListener("click", function (e) {
+  if (e.target.id === "editSwitchModal") {
+    closeEditSwitchModal();
   }
 });
 
