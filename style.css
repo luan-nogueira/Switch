@@ -22,16 +22,9 @@
   --radius-sm: 12px;
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
-html,
-body {
-  min-height: 100%;
-}
+html, body { min-height: 100%; }
 
 body {
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
@@ -50,9 +43,7 @@ body {
   z-index: 0;
 }
 
-.hidden {
-  display: none !important;
-}
+.hidden { display: none !important; }
 
 .container {
   width: min(1420px, 94%);
@@ -131,27 +122,17 @@ body {
   gap: 8px;
 }
 
-.field.full {
-  grid-column: 1 / -1;
-}
-
 label {
   font-size: 13px;
   color: var(--muted);
   font-weight: 700;
 }
 
-input,
-select,
-textarea,
-button,
-a {
+input, select, textarea, button, a {
   font: inherit;
 }
 
-input,
-select,
-textarea {
+input, select, textarea {
   width: 100%;
   background: rgba(9, 16, 30, 0.95);
   border: 1px solid var(--border);
@@ -193,9 +174,7 @@ textarea {
   text-align: center;
 }
 
-.btn:hover {
-  transform: translateY(-1px);
-}
+.btn:hover { transform: translateY(-1px); }
 
 .btn-primary {
   background: linear-gradient(135deg, var(--primary), #6aa0ff);
@@ -212,9 +191,7 @@ textarea {
   border: 1px solid var(--border);
 }
 
-.btn-outline:hover {
-  background: rgba(255, 255, 255, 0.06);
-}
+.btn-outline:hover { background: rgba(255, 255, 255, 0.06); }
 
 .btn-danger {
   background: linear-gradient(135deg, var(--danger), #ff6868);
@@ -244,13 +221,9 @@ textarea {
   transform: none;
 }
 
-.btn-full {
-  width: 100%;
-}
+.btn-full { width: 100%; }
 
-#searchInput {
-  margin-bottom: 18px;
-}
+#searchInput { margin-bottom: 18px; }
 
 .stats-inline {
   display: flex;
@@ -267,11 +240,6 @@ textarea {
 .stats-inline strong {
   font-size: 15px;
   color: var(--text);
-}
-
-.switch-list {
-  display: grid;
-  gap: 18px;
 }
 
 .switch-card {
@@ -314,16 +282,11 @@ textarea {
   justify-content: center;
   font-size: 18px;
   transition: 0.25s ease;
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
 }
 
-.toggle-arrow.open {
-  transform: rotate(180deg);
-}
+.toggle-arrow.open { transform: rotate(180deg); }
 
-.switch-info {
-  min-width: 0;
-}
+.switch-info { min-width: 0; }
 
 .switch-info h3 {
   font-size: 22px;
@@ -354,19 +317,11 @@ textarea {
   animation: fadeDown 0.22s ease;
 }
 
-.switch-body.open {
-  display: block;
-}
+.switch-body.open { display: block; }
 
 @keyframes fadeDown {
-  from {
-    opacity: 0;
-    transform: translateY(-6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .ports-grid {
@@ -449,9 +404,7 @@ textarea {
   line-height: 1.6;
 }
 
-.port-details strong {
-  color: #d3def7;
-}
+.port-details strong { color: #d3def7; }
 
 .port-actions {
   display: flex;
@@ -480,14 +433,6 @@ textarea {
   color: var(--text);
 }
 
-.footer-note {
-  text-align: center;
-  color: var(--muted);
-  font-size: 13px;
-  margin-top: 18px;
-  padding-bottom: 10px;
-}
-
 .modal {
   position: fixed;
   inset: 0;
@@ -499,9 +444,7 @@ textarea {
   z-index: 999;
 }
 
-.modal.show {
-  display: flex;
-}
+.modal.show { display: flex; }
 
 .modal-content {
   width: min(760px, 100%);
@@ -510,6 +453,10 @@ textarea {
   border-radius: 24px;
   overflow: hidden;
   box-shadow: var(--shadow);
+}
+
+.admin-modal-content {
+  width: min(1200px, 100%);
 }
 
 .modal-header {
@@ -522,13 +469,9 @@ textarea {
   background: linear-gradient(90deg, rgba(79,140,255,0.08), rgba(79,140,255,0.02));
 }
 
-.modal-header h3 {
-  font-size: 20px;
-}
+.modal-header h3 { font-size: 20px; }
 
-.modal-body {
-  padding: 20px;
-}
+.modal-body { padding: 20px; }
 
 .modal-form {
   display: flex;
@@ -551,9 +494,7 @@ textarea {
   flex-wrap: wrap;
 }
 
-.actions-row .btn {
-  flex: 1;
-}
+.actions-row .btn { flex: 1; }
 
 .auth-screen {
   min-height: 100vh;
@@ -613,13 +554,8 @@ textarea {
   margin-top: 4px;
 }
 
-.auth-message.error {
-  color: #fda4af;
-}
-
-.auth-message.success {
-  color: #86efac;
-}
+.auth-message.error { color: #fda4af; }
+.auth-message.success { color: #86efac; }
 
 .user-box {
   min-height: 46px;
@@ -633,28 +569,9 @@ textarea {
   font-weight: 700;
 }
 
-.contract-box {
-  min-width: 220px;
-}
-
-.contract-box select {
-  min-height: 46px;
-  background: rgba(9, 16, 30, 0.95);
-  border: 1px solid var(--border);
-  color: var(--text);
-  border-radius: var(--radius-md);
-  padding: 12px 14px;
-}
-
-/* ===================== ADMIN / CONFIG ===================== */
 #adminBtn {
   min-width: 46px;
-  height: 46px;
-  padding: 0 14px;
-  font-size: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  min-height: 46px;
 }
 
 .contracts-checks {
@@ -683,37 +600,86 @@ textarea {
   accent-color: var(--primary);
 }
 
-.admin-note {
-  margin-top: 16px;
-  padding: 14px;
-  border-radius: 14px;
+.admin-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr;
+  gap: 18px;
+}
+
+.admin-panel {
+  background: rgba(255,255,255,0.02);
   border: 1px solid var(--border-soft);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.6;
+  border-radius: 18px;
+  padding: 16px;
 }
 
-#adminUserMessage {
-  min-height: 22px;
+.admin-panel h4 {
+  margin-bottom: 14px;
+  font-size: 18px;
 }
 
-#changePasswordForm {
+.admin-list {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
+  margin-top: 16px;
 }
 
-#changePasswordForm input {
-  width: 100%;
+.admin-card {
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 14px;
+  background: rgba(255,255,255,0.02);
 }
 
-#changePasswordForm button {
-  width: 100%;
+.admin-card h5 {
+  font-size: 16px;
+  margin-bottom: 6px;
+}
+
+.admin-card p {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-bottom: 4px;
+}
+
+.admin-card .actions-row {
+  margin-top: 12px;
+}
+
+.badge-inline {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.04);
+}
+
+.badge-admin {
+  color: #93c5fd;
+  border-color: rgba(147,197,253,0.3);
+}
+
+.badge-user {
+  color: #d1d5db;
+}
+
+.badge-contract {
+  color: #86efac;
+  border-color: rgba(134,239,172,0.25);
+  margin: 2px 6px 2px 0;
 }
 
 @media (max-width: 1020px) {
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -744,13 +710,9 @@ textarea {
     width: min(96%, 96%);
   }
 
-  .brand h1 {
-    font-size: 24px;
-  }
+  .brand h1 { font-size: 24px; }
 
-  .topbar-actions {
-    width: 100%;
-  }
+  .topbar-actions { width: 100%; }
 
   .topbar-actions .btn,
   .topbar-actions select,
@@ -758,25 +720,15 @@ textarea {
     width: 100%;
   }
 
-  .ports-grid {
-    grid-template-columns: 1fr;
-  }
+  .ports-grid { grid-template-columns: 1fr; }
 
-  .switch-left {
-    width: 100%;
-  }
+  .switch-left { width: 100%; }
 
-  .auth-card {
-    padding: 22px;
-  }
+  .auth-card { padding: 22px; }
 
-  .auth-brand h1 {
-    font-size: 22px;
-  }
+  .auth-brand h1 { font-size: 22px; }
 
-  .modal {
-    padding: 10px;
-  }
+  .modal { padding: 10px; }
 
   .modal-content {
     width: 100%;
