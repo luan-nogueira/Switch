@@ -1309,10 +1309,10 @@ $("adminUserForm")?.addEventListener("submit", async function (e) {
     renderAdminContractsChecks();
     setMessage("adminUserMessage", "Usuário criado com sucesso.", false);
   } catch (error) {
-    console.error("Erro ao criar usuário:", error);
+    console.error(error);
     setMessage("adminUserMessage", translateCallableError(error), true);
   }
-};
+});
 
 window.openEditUserModal = function (userId) {
   if (!isCurrentUserAdmin()) {
