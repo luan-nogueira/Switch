@@ -148,6 +148,8 @@ function showApp() {
 
 function translateFirebaseError(error) {
   const code = error?.code || "";
+  const message = error?.message || "";
+
   switch (code) {
     case "auth/invalid-email":
       return "Email inválido.";
@@ -166,10 +168,13 @@ function translateFirebaseError(error) {
       return "Muitas tentativas. Tente novamente em alguns minutos.";
     case "auth/network-request-failed":
       return "Erro de rede. Verifique sua conexão.";
-    case "auth/requires-recent-login":
-      return "Faça login novamente para alterar a senha.";
+    case "auth/api-key-not-valid":
+    case "auth/invalid-api-key":
+      return "Configuração do Firebase inválida.";
+    case "permission-denied":
+      return "Sem permissão para acessar os dados.";
     default:
-      return error?.message || "Ocorreu um erro.";
+      return message || "Ocorreu um erro.";
   }
 }
 
@@ -180,6 +185,7 @@ function translateCallableError(error) {
   if (message.includes("already-exists")) return "Já existe um usuário com esse email.";
   if (message.includes("invalid-argument")) return "Dados inválidos. Revise os campos.";
   if (message.includes("not-found")) return "Registro não encontrado.";
+  if (message.includes("failed-precondition")) return "Operação não permitida.";
   return message || "Erro ao processar a ação.";
 }
 
@@ -226,7 +232,7 @@ let unsubscribeContracts = null;
 let expandedState = {};
 
 /* =========================================================
-   LISTENERS CLEANUP
+   CLEANUP
 ========================================================= */
 function cleanupListeners() {
   if (unsubscribeUserProfile) {
@@ -250,25 +256,37 @@ function cleanupListeners() {
   }
 }
 
+function resetAppState() {
+  currentUserProfile = null;
+  currentContractId = "";
+  currentContractNameMap = {};
+  switches = [];
+  users = [];
+  contracts = [];
+  editingSwitchId = null;
+  editingPortIndex = null;
+  switchEditingId = null;
+  editingUserId = null;
+  expandedState = {};
+}
+
 /* =========================================================
    CONTRATOS
 ========================================================= */
 async function loadContractNames(contractIds) {
   const map = {};
+
   await Promise.all(
     contractIds.map(async (id) => {
       try {
         const snap = await getDoc(doc(db, "contracts", id));
-        if (snap.exists()) {
-          map[id] = snap.data().name || formatContractId(id);
-        } else {
-          map[id] = formatContractId(id);
-        }
+        map[id] = snap.exists() ? (snap.data().name || formatContractId(id)) : formatContractId(id);
       } catch {
         map[id] = formatContractId(id);
       }
     })
   );
+
   currentContractNameMap = map;
 }
 
@@ -377,17 +395,28 @@ function renderContractsList() {
 }
 
 function subscribeContracts() {
-  const q = query(collection(db, "contracts"), orderBy("name"));
-  unsubscribeContracts = onSnapshot(q, (snapshot) => {
-    contracts = snapshot.docs.map(docSnap => ({
-      id: docSnap.id,
-      ...docSnap.data()
-    }));
+  if (unsubscribeContracts) {
+    unsubscribeContracts();
+    unsubscribeContracts = null;
+  }
 
-    renderContractsList();
-    renderAdminContractsChecks();
-    renderEditContractsChecks(editingUserId ? (users.find(u => u.id === editingUserId)?.contracts || []) : []);
-  });
+  const q = query(collection(db, "contracts"), orderBy("name"));
+  unsubscribeContracts = onSnapshot(
+    q,
+    (snapshot) => {
+      contracts = snapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      }));
+
+      renderContractsList();
+      renderAdminContractsChecks();
+      renderEditContractsChecks(editingUserId ? (users.find(u => u.id === editingUserId)?.contracts || []) : []);
+    },
+    (error) => {
+      console.error("Erro ao carregar contratos:", error);
+    }
+  );
 }
 
 /* =========================================================
@@ -396,46 +425,58 @@ function subscribeContracts() {
 function subscribeUserProfile(uid) {
   const userRef = doc(db, "users", uid);
 
-  unsubscribeUserProfile = onSnapshot(userRef, async (snap) => {
-    if (!snap.exists()) {
-      alert("Seu usuário autenticou, mas não existe cadastro em /users/{uid} no Firestore.");
-      await signOut(auth);
-      return;
+  unsubscribeUserProfile = onSnapshot(
+    userRef,
+    async (snap) => {
+      try {
+        if (!snap.exists()) {
+          alert("Seu usuário autenticou, mas não existe cadastro em /users/{uid} no Firestore.");
+          await signOut(auth);
+          return;
+        }
+
+        currentUserProfile = {
+          id: snap.id,
+          ...snap.data()
+        };
+
+        const loggedUser = $("loggedUser");
+        if (loggedUser) {
+          loggedUser.textContent = currentUserProfile?.name
+            ? `${currentUserProfile.name} (${currentUserProfile.email || currentUser?.email || ""})`
+            : (currentUser?.email || "Usuário autenticado");
+        }
+
+        const allowedContracts = Array.isArray(currentUserProfile.contracts)
+          ? currentUserProfile.contracts
+          : [];
+
+        await loadContractNames(allowedContracts);
+
+        if (currentUserProfile.mustChangePassword === true) {
+          showChangePasswordScreen();
+          return;
+        }
+
+        showApp();
+
+        const ok = ensureAllowedContract();
+        if (ok) subscribeSwitches(currentContractId);
+
+        if (isCurrentUserAdmin()) {
+          subscribeUsers();
+          subscribeContracts();
+        }
+      } catch (error) {
+        console.error("Erro ao carregar perfil:", error);
+        alert("Erro ao carregar perfil do usuário.");
+      }
+    },
+    (error) => {
+      console.error("Erro no listener do perfil:", error);
+      alert("Sem permissão para carregar o perfil do usuário.");
     }
-
-    currentUserProfile = {
-      id: snap.id,
-      ...snap.data()
-    };
-
-    const loggedUser = $("loggedUser");
-    if (loggedUser) {
-      loggedUser.textContent = currentUserProfile?.name
-        ? `${currentUserProfile.name} (${currentUserProfile.email || currentUser?.email || ""})`
-        : (currentUser?.email || "Usuário autenticado");
-    }
-
-    const allowedContracts = Array.isArray(currentUserProfile.contracts)
-      ? currentUserProfile.contracts
-      : [];
-
-    await loadContractNames(allowedContracts);
-
-    if (currentUserProfile.mustChangePassword === true) {
-      showChangePasswordScreen();
-      return;
-    }
-
-    showApp();
-
-    const ok = ensureAllowedContract();
-    if (ok) subscribeSwitches(currentContractId);
-
-    if (isCurrentUserAdmin()) {
-      subscribeUsers();
-      subscribeContracts();
-    }
-  });
+  );
 }
 
 /* =========================================================
@@ -448,13 +489,24 @@ function subscribeUsers() {
   }
 
   const q = query(collection(db, "users"), orderBy("name"));
-  unsubscribeUsers = onSnapshot(q, (snapshot) => {
-    users = snapshot.docs.map(docSnap => ({
-      id: docSnap.id,
-      ...docSnap.data()
-    }));
-    renderUsersList();
-  });
+  unsubscribeUsers = onSnapshot(
+    q,
+    (snapshot) => {
+      users = snapshot.docs.map(docSnap => ({
+        id: docSnap.id,
+        ...docSnap.data()
+      }));
+      renderUsersList();
+    },
+    (error) => {
+      console.error("Erro ao carregar usuários:", error);
+    }
+  );
+}
+
+function getContractName(contractId) {
+  const contract = contracts.find(item => item.id === contractId);
+  return contract?.name || currentContractNameMap[contractId] || formatContractId(contractId);
 }
 
 function renderUsersList() {
@@ -473,6 +525,7 @@ function renderUsersList() {
 
   list.innerHTML = users.map(user => {
     const userContracts = Array.isArray(user.contracts) ? user.contracts : [];
+
     return `
       <div class="admin-card">
         <h5>${escapeHtml(user.name || "Sem nome")}</h5>
@@ -502,13 +555,8 @@ function renderUsersList() {
   }).join("");
 }
 
-function getContractName(contractId) {
-  const contract = contracts.find(item => item.id === contractId);
-  return contract?.name || currentContractNameMap[contractId] || formatContractId(contractId);
-}
-
 /* =========================================================
-   SWITCHES EM TEMPO REAL
+   SWITCHES
 ========================================================= */
 function subscribeSwitches(contractId) {
   if (!contractId) {
@@ -541,7 +589,7 @@ function subscribeSwitches(contractId) {
       updateStats();
     },
     (error) => {
-      console.error(error);
+      console.error("Erro ao carregar switches:", error);
       alert("Erro ao carregar switches do contrato selecionado.");
     }
   );
@@ -563,9 +611,12 @@ $("authForm")?.addEventListener("submit", async function (e) {
   }
 
   try {
-    await signInWithEmailAndPassword(auth, email, password);
+    console.log("Tentando login com:", email);
+    const cred = await signInWithEmailAndPassword(auth, email, password);
+    console.log("Login realizado com sucesso:", cred.user.uid);
     $("authForm")?.reset();
   } catch (error) {
+    console.error("ERRO NO LOGIN:", error);
     setMessage("authMessage", translateFirebaseError(error), true);
   }
 });
@@ -574,6 +625,7 @@ $("logoutBtn")?.addEventListener("click", async function () {
   try {
     await signOut(auth);
   } catch (error) {
+    console.error("Erro ao sair:", error);
     alert("Erro ao sair: " + translateFirebaseError(error));
   }
 });
@@ -614,25 +666,17 @@ $("changePasswordForm")?.addEventListener("submit", async function (e) {
     setMessage("changePasswordMessage", "Senha alterada com sucesso!", false);
     showApp();
   } catch (error) {
+    console.error("Erro ao trocar senha:", error);
     setMessage("changePasswordMessage", translateFirebaseError(error), true);
   }
 });
 
 onAuthStateChanged(auth, (user) => {
-  cleanupListeners();
+  console.log("onAuthStateChanged:", user ? user.uid : "sem usuário");
 
+  cleanupListeners();
   currentUser = user || null;
-  currentUserProfile = null;
-  currentContractId = "";
-  currentContractNameMap = {};
-  switches = [];
-  users = [];
-  contracts = [];
-  expandedState = {};
-  switchEditingId = null;
-  editingSwitchId = null;
-  editingPortIndex = null;
-  editingUserId = null;
+  resetAppState();
 
   if (user) {
     subscribeUserProfile(user.uid);
@@ -810,11 +854,11 @@ window.editSwitch = function (id) {
 
   switchEditingId = id;
 
-  $("editSwitchName").value = sw.name || "";
-  $("editSwitchLocation").value = sw.location || "";
-  $("editSwitchModel").value = sw.model || "";
-  $("editSwitchIp").value = sw.ip || "";
-  $("editSwitchObs").value = sw.obs || "";
+  if ($("editSwitchName")) $("editSwitchName").value = sw.name || "";
+  if ($("editSwitchLocation")) $("editSwitchLocation").value = sw.location || "";
+  if ($("editSwitchModel")) $("editSwitchModel").value = sw.model || "";
+  if ($("editSwitchIp")) $("editSwitchIp").value = sw.ip || "";
+  if ($("editSwitchObs")) $("editSwitchObs").value = sw.obs || "";
 
   $("editSwitchModal")?.classList.add("show");
 };
@@ -841,7 +885,7 @@ window.deleteSwitch = async function (id) {
     await deleteDoc(doc(db, "contracts", currentContractId, "switches", id));
     delete expandedState[id];
   } catch (error) {
-    console.error(error);
+    console.error("Erro ao excluir switch:", error);
     alert("Erro ao excluir switch.");
   }
 };
@@ -856,12 +900,12 @@ window.openPortModal = function (switchId, portIndex) {
   const port = Array.isArray(sw.ports) ? sw.ports[portIndex] : null;
   if (!port) return;
 
-  $("modalTitle").textContent = `${sw.name} - Porta ${port.number}`;
-  $("portDevice").value = port.device || "";
-  $("portStatus").value = port.status || "inativo";
-  $("portIp").value = port.ip || "";
-  $("portSector").value = port.sector || "";
-  $("portObs").value = port.obs || "";
+  if ($("modalTitle")) $("modalTitle").textContent = `${sw.name} - Porta ${port.number}`;
+  if ($("portDevice")) $("portDevice").value = port.device || "";
+  if ($("portStatus")) $("portStatus").value = port.status || "inativo";
+  if ($("portIp")) $("portIp").value = port.ip || "";
+  if ($("portSector")) $("portSector").value = port.sector || "";
+  if ($("portObs")) $("portObs").value = port.obs || "";
 
   $("portModal")?.classList.add("show");
 };
@@ -874,11 +918,11 @@ window.closeModal = function () {
 };
 
 window.clearPortData = function () {
-  $("portDevice").value = "";
-  $("portStatus").value = "inativo";
-  $("portIp").value = "";
-  $("portSector").value = "";
-  $("portObs").value = "";
+  if ($("portDevice")) $("portDevice").value = "";
+  if ($("portStatus")) $("portStatus").value = "inativo";
+  if ($("portIp")) $("portIp").value = "";
+  if ($("portSector")) $("portSector").value = "";
+  if ($("portObs")) $("portObs").value = "";
 };
 
 /* =========================================================
@@ -925,9 +969,9 @@ $("switchForm")?.addEventListener("submit", async function (e) {
     });
 
     this.reset();
-    $("switchPorts").value = "24";
+    if ($("switchPorts")) $("switchPorts").value = "24";
   } catch (error) {
-    console.error(error);
+    console.error("Erro ao salvar switch:", error);
     alert("Erro ao salvar switch.");
   }
 });
@@ -982,7 +1026,7 @@ $("editSwitchForm")?.addEventListener("submit", async function (e) {
 
     closeEditSwitchModal();
   } catch (error) {
-    console.error(error);
+    console.error("Erro ao editar switch:", error);
     alert("Erro ao editar switch.");
   }
 });
@@ -1019,7 +1063,7 @@ $("portForm")?.addEventListener("submit", async function (e) {
 
     closeModal();
   } catch (error) {
-    console.error(error);
+    console.error("Erro ao salvar porta:", error);
     alert("Erro ao salvar porta.");
   }
 });
@@ -1050,7 +1094,7 @@ function exportData() {
 }
 
 async function importData(event) {
-  const file = event.target.files[0];
+  const file = event.target.files?.[0];
   if (!file) return;
 
   if (!currentContractId) {
@@ -1100,7 +1144,7 @@ async function importData(event) {
       await batch.commit();
       alert("Importação concluída com sucesso.");
     } catch (error) {
-      console.error(error);
+      console.error("Erro ao importar:", error);
       alert("Erro ao importar o arquivo JSON.");
     } finally {
       event.target.value = "";
@@ -1193,7 +1237,7 @@ $("contractForm")?.addEventListener("submit", async function (e) {
     this.reset();
     setMessage("contractMessage", "Contrato cadastrado com sucesso.", false);
   } catch (error) {
-    console.error(error);
+    console.error("Erro ao cadastrar contrato:", error);
     setMessage("contractMessage", "Erro ao cadastrar contrato.");
   }
 });
@@ -1211,7 +1255,7 @@ window.deleteContract = async function (contractId) {
     await deleteDoc(doc(db, "contracts", contractId));
     alert("Contrato excluído.");
   } catch (error) {
-    console.error(error);
+    console.error("Erro ao excluir contrato:", error);
     alert("Erro ao excluir contrato. Verifique se não existem dependências.");
   }
 };
@@ -1265,7 +1309,7 @@ $("adminUserForm")?.addEventListener("submit", async function (e) {
     renderAdminContractsChecks();
     setMessage("adminUserMessage", "Usuário criado com sucesso.", false);
   } catch (error) {
-    console.error(error);
+    console.error("Erro ao criar usuário:", error);
     setMessage("adminUserMessage", translateCallableError(error), true);
   }
 };
@@ -1281,10 +1325,11 @@ window.openEditUserModal = function (userId) {
 
   editingUserId = userId;
 
-  $("editUserName").value = user.name || "";
-  $("editUserEmail").value = user.email || "";
-  $("editUserIsAdmin").value = user.isAdmin ? "true" : "false";
-  $("editMustChangePassword").value = user.mustChangePassword ? "true" : "false";
+  if ($("editUserName")) $("editUserName").value = user.name || "";
+  if ($("editUserEmail")) $("editUserEmail").value = user.email || "";
+  if ($("editUserIsAdmin")) $("editUserIsAdmin").value = user.isAdmin ? "true" : "false";
+  if ($("editMustChangePassword")) $("editMustChangePassword").value = user.mustChangePassword ? "true" : "false";
+
   renderEditContractsChecks(Array.isArray(user.contracts) ? user.contracts : []);
   clearMessage("editUserMessage");
 
@@ -1334,7 +1379,7 @@ $("editUserForm")?.addEventListener("submit", async function (e) {
 
     setMessage("editUserMessage", "Usuário atualizado com sucesso.", false);
   } catch (error) {
-    console.error(error);
+    console.error("Erro ao atualizar usuário:", error);
     setMessage("editUserMessage", translateCallableError(error), true);
   }
 });
@@ -1361,7 +1406,7 @@ $("resetPasswordBtn")?.addEventListener("click", async function () {
 
     setMessage("editUserMessage", "Senha redefinida com sucesso.", false);
   } catch (error) {
-    console.error(error);
+    console.error("Erro ao redefinir senha:", error);
     setMessage("editUserMessage", translateCallableError(error), true);
   }
 });
@@ -1382,7 +1427,7 @@ window.removeUser = async function (userId) {
     await fnDeleteManagedUser({ uid: userId });
     alert("Usuário excluído com sucesso.");
   } catch (error) {
-    console.error(error);
+    console.error("Erro ao excluir usuário:", error);
     alert(translateCallableError(error));
   }
 };
