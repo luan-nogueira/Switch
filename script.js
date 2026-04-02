@@ -177,6 +177,32 @@ function translateFirebaseError(error) {
   }
 }
 
+function isValidIpOrHost(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return true;
+
+  const noProtocol = raw.replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
+
+  const ipv4Regex =
+    /^(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
+
+  const hostnameRegex =
+    /^(localhost|[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}|[a-zA-Z0-9.-]+)$/;
+
+  return ipv4Regex.test(noProtocol) || hostnameRegex.test(noProtocol);
+}
+
+function normalizeSwitchUrl(ip) {
+  const value = String(ip || "").trim();
+  if (!value) return "";
+
+  if (/^https?:\/\//i.test(value)) {
+    return value;
+  }
+
+  return `http://${value}`;
+}
+
 /* =========================================================
    ESTADO
 ========================================================= */
@@ -497,6 +523,7 @@ function renderSwitches() {
       sw.name,
       sw.location,
       sw.model,
+      sw.ip,
       sw.obs,
       ...(Array.isArray(sw.ports)
         ? sw.ports.map(port => `${port.number} ${port.device} ${port.status} ${port.ip} ${port.sector} ${port.obs}`)
@@ -519,6 +546,8 @@ function renderSwitches() {
   container.innerHTML = filtered.map(sw => {
     const ports = Array.isArray(sw.ports) ? sw.ports : [];
     const usedCount = ports.filter(port => String(port.device || "").trim() !== "").length;
+    const switchIp = String(sw.ip || "").trim();
+    const switchUrl = normalizeSwitchUrl(switchIp);
 
     return `
       <div class="switch-card">
@@ -531,6 +560,7 @@ function renderSwitches() {
               <p>
                 Local: ${escapeHtml(sw.location || "Não informado")} |
                 Modelo: ${escapeHtml(sw.model || "Não informado")} |
+                IP: ${escapeHtml(switchIp || "Não informado")} |
                 Portas: ${sw.portsCount || ports.length || 0} |
                 Cadastradas: ${usedCount}
               </p>
@@ -539,6 +569,11 @@ function renderSwitches() {
           </div>
 
           <div class="switch-actions" onclick="event.stopPropagation()">
+            ${
+              switchIp
+                ? `<a class="btn btn-web" href="${escapeHtml(switchUrl)}" target="_blank" rel="noopener noreferrer">Clique para ir para Web do switch</a>`
+                : `<button class="btn btn-disabled" type="button" disabled>Sem IP cadastrado</button>`
+            }
             <button class="btn btn-outline" onclick="editSwitch('${sw.id}')">Editar switch</button>
             <button class="btn btn-danger" onclick="deleteSwitch('${sw.id}')">Excluir</button>
           </div>
@@ -615,6 +650,7 @@ window.editSwitch = function (id) {
   if ($("editSwitchName")) $("editSwitchName").value = sw.name || "";
   if ($("editSwitchLocation")) $("editSwitchLocation").value = sw.location || "";
   if ($("editSwitchModel")) $("editSwitchModel").value = sw.model || "";
+  if ($("editSwitchIp")) $("editSwitchIp").value = sw.ip || "";
   if ($("editSwitchObs")) $("editSwitchObs").value = sw.obs || "";
 
   $("editSwitchModal")?.classList.add("show");
@@ -697,10 +733,16 @@ $("switchForm")?.addEventListener("submit", async function (e) {
   const location = $("switchLocation")?.value.trim() || "";
   const portsCount = parseInt($("switchPorts")?.value || "24", 10);
   const model = $("switchModel")?.value.trim() || "";
+  const ip = $("switchIp")?.value.trim() || "";
   const obs = $("switchObs")?.value.trim() || "";
 
   if (!name) {
     alert("Informe o nome do switch.");
+    return;
+  }
+
+  if (!isValidIpOrHost(ip)) {
+    alert("Informe um IP ou endereço válido para o switch.");
     return;
   }
 
@@ -711,6 +753,7 @@ $("switchForm")?.addEventListener("submit", async function (e) {
       location,
       portsCount,
       model,
+      ip,
       obs,
       expanded: false,
       ports: createPorts(portsCount),
@@ -751,10 +794,16 @@ $("editSwitchForm")?.addEventListener("submit", async function (e) {
   const name = $("editSwitchName")?.value.trim() || "";
   const location = $("editSwitchLocation")?.value.trim() || "";
   const model = $("editSwitchModel")?.value.trim() || "";
+  const ip = $("editSwitchIp")?.value.trim() || "";
   const obs = $("editSwitchObs")?.value.trim() || "";
 
   if (!name) {
     alert("Informe o nome do switch.");
+    return;
+  }
+
+  if (!isValidIpOrHost(ip)) {
+    alert("Informe um IP ou endereço válido para o switch.");
     return;
   }
 
@@ -763,6 +812,7 @@ $("editSwitchForm")?.addEventListener("submit", async function (e) {
       name,
       location,
       model,
+      ip,
       obs,
       updatedAt: serverTimestamp()
     });
@@ -866,6 +916,8 @@ async function importData(event) {
       const batch = writeBatch(db);
 
       for (const sw of importedSwitches) {
+        const importedIp = String(sw.ip || "").trim();
+
         const ref = doc(collection(db, "contracts", currentContractId, "switches"));
         batch.set(ref, {
           localId: generateId(),
@@ -873,6 +925,7 @@ async function importData(event) {
           location: String(sw.location || "").trim(),
           portsCount: Number(sw.portsCount || (Array.isArray(sw.ports) ? sw.ports.length : 24)),
           model: String(sw.model || "").trim(),
+          ip: importedIp,
           obs: String(sw.obs || "").trim(),
           expanded: false,
           ports: Array.isArray(sw.ports)
