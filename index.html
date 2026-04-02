@@ -34,7 +34,6 @@
 
         <div class="auth-actions">
           <button type="submit" class="btn btn-primary btn-full">Entrar</button>
-          <button type="button" id="registerBtn" class="btn btn-outline btn-full">Criar conta</button>
         </div>
 
         <p id="authMessage" class="auth-message"></p>
@@ -75,7 +74,7 @@
 
         <span id="loggedUser" class="user-box"></span>
 
-        <button class="btn btn-outline" id="adminBtn" title="Configurações">⚙️</button>
+        <button class="btn btn-outline" id="adminBtn" title="Gerenciar acessos">👥 Acessos</button>
         <button class="btn btn-outline" id="exportBtn">Exportar</button>
         <button class="btn btn-outline" id="importBtn">Importar</button>
         <button class="btn btn-danger" id="logoutBtn">Sair</button>
@@ -178,42 +177,99 @@
 
   <!-- MODAL ADMIN -->
   <div class="modal" id="adminModal">
-    <div class="modal-content">
+    <div class="modal-content admin-modal-content">
       <div class="modal-header">
-        <h3>Gerenciar usuários</h3>
+        <h3>Gerenciar acessos</h3>
         <button type="button" class="close-btn" onclick="closeAdminModal()">×</button>
       </div>
 
-      <div class="modal-body">
-        <form id="adminUserForm" class="modal-form">
-          <input id="adminUserName" placeholder="Nome" required />
-          <input id="adminUserEmail" placeholder="Email" required />
-          <input id="adminUserPassword" placeholder="Senha inicial" required />
+      <div class="modal-body admin-body">
+        <div class="admin-grid">
+          <!-- CONTRATOS -->
+          <section class="admin-panel">
+            <h4>Contratos</h4>
 
-          <select id="adminUserIsAdmin">
+            <form id="contractForm" class="modal-form">
+              <input id="contractName" placeholder="Nome do contrato" required />
+              <input id="contractId" placeholder="ID do contrato (ex: ferroport)" required />
+              <div class="actions-row">
+                <button type="submit" class="btn btn-primary">Adicionar contrato</button>
+              </div>
+              <p id="contractMessage" class="auth-message"></p>
+            </form>
+
+            <div id="contractsList" class="admin-list"></div>
+          </section>
+
+          <!-- USUÁRIOS -->
+          <section class="admin-panel">
+            <h4>Usuários</h4>
+
+            <form id="adminUserForm" class="modal-form">
+              <input id="adminUserName" placeholder="Nome" required />
+              <input id="adminUserEmail" placeholder="Email" required />
+              <input id="adminUserPassword" placeholder="Senha inicial" required />
+
+              <select id="adminUserIsAdmin">
+                <option value="false">Usuário</option>
+                <option value="true">Administrador</option>
+              </select>
+
+              <label>Contratos liberados</label>
+              <div id="adminContractsChecks" class="contracts-checks"></div>
+
+              <select id="adminMustChangePassword">
+                <option value="true">Trocar senha no primeiro login</option>
+                <option value="false">Não exigir troca</option>
+              </select>
+
+              <div class="actions-row">
+                <button type="submit" class="btn btn-primary">Criar usuário</button>
+              </div>
+
+              <p id="adminUserMessage" class="auth-message"></p>
+            </form>
+
+            <div id="usersList" class="admin-list"></div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL EDITAR USUÁRIO -->
+  <div class="modal" id="editUserModal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Editar acesso do usuário</h3>
+        <button type="button" class="close-btn" onclick="closeEditUserModal()">×</button>
+      </div>
+
+      <div class="modal-body">
+        <form id="editUserForm" class="modal-form">
+          <input id="editUserName" placeholder="Nome" required />
+          <input id="editUserEmail" placeholder="Email" required />
+
+          <select id="editUserIsAdmin">
             <option value="false">Usuário</option>
             <option value="true">Administrador</option>
           </select>
 
-          <label>Contratos</label>
+          <label>Contratos liberados</label>
+          <div id="editContractsChecks" class="contracts-checks"></div>
 
-          <div class="contracts-checks">
-            <label><input type="checkbox" value="ferroport" class="admin-contract-check"> Ferroport</label>
-            <label><input type="checkbox" value="nov" class="admin-contract-check"> Nov</label>
-            <label><input type="checkbox" value="vast" class="admin-contract-check"> Vast</label>
-          </div>
-
-          <select id="adminMustChangePassword">
-            <option value="true">Trocar senha no primeiro login</option>
+          <select id="editMustChangePassword">
+            <option value="true">Trocar senha no próximo login</option>
             <option value="false">Não exigir troca</option>
           </select>
 
           <div class="actions-row">
-            <button type="submit" class="btn btn-primary">Criar usuário</button>
-            <button type="button" class="btn btn-danger" onclick="closeAdminModal()">Fechar</button>
+            <button type="submit" class="btn btn-primary">Salvar alterações</button>
+            <button type="button" class="btn btn-outline" id="resetPasswordBtn">Redefinir senha</button>
+            <button type="button" class="btn btn-danger" onclick="closeEditUserModal()">Fechar</button>
           </div>
 
-          <p id="adminUserMessage"></p>
+          <p id="editUserMessage" class="auth-message"></p>
         </form>
       </div>
     </div>
