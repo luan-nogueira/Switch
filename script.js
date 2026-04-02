@@ -6,37 +6,52 @@ import {
   signOut,
   updatePassword
 } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-auth.js";
+
 import {
   getFirestore,
   doc,
   getDoc,
   setDoc,
+  updateDoc,
+  deleteDoc,
   onSnapshot,
   collection,
   query,
   orderBy,
   addDoc,
-  updateDoc,
-  deleteDoc,
   serverTimestamp,
   writeBatch
 } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
+
+import {
+  getFunctions,
+  httpsCallable
+} from "https://www.gstatic.com/firebasejs/12.10.0/firebase-functions.js";
 
 /* =========================================================
    FIREBASE
 ========================================================= */
 const firebaseConfig = {
-  apiKey: "AIzaSyCeiZSLoTFyGEyOFTLcH4FCPJI_-YV8pmM",
-  authDomain: "switchs-f8ca3.firebaseapp.com",
-  projectId: "switchs-f8ca3",
-  storageBucket: "switchs-f8ca3.firebasestorage.app",
-  messagingSenderId: "24056268906",
-  appId: "1:24056268906:web:d07426f51252c20d95e213"
+  apiKey: "SUA_API_KEY",
+  authDomain: "SEU_AUTH_DOMAIN",
+  projectId: "SEU_PROJECT_ID",
+  storageBucket: "SEU_STORAGE_BUCKET",
+  messagingSenderId: "SEU_MESSAGING_SENDER_ID",
+  appId: "SEU_APP_ID"
 };
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+const functions = getFunctions(app, "southamerica-east1");
+
+/* =========================================================
+   CALLABLE FUNCTIONS
+========================================================= */
+const fnCreateManagedUser = httpsCallable(functions, "createManagedUser");
+const fnUpdateManagedUser = httpsCallable(functions, "updateManagedUser");
+const fnDeleteManagedUser = httpsCallable(functions, "deleteManagedUser");
+const fnResetManagedUserPassword = httpsCallable(functions, "resetManagedUserPassword");
 
 /* =========================================================
    HELPERS
@@ -86,43 +101,25 @@ function formatContractId(id) {
     .join(" ");
 }
 
-function setAuthMessage(message, isError = true) {
-  const el = $("authMessage");
+function normalizeContractId(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+function setMessage(id, message, isError = true) {
+  const el = $(id);
   if (!el) return;
   el.textContent = message;
   el.className = isError ? "auth-message error" : "auth-message success";
 }
 
-function clearAuthMessage() {
-  const el = $("authMessage");
-  if (!el) return;
-  el.textContent = "";
-  el.className = "auth-message";
-}
-
-function setChangePasswordMessage(message, isError = true) {
-  const el = $("changePasswordMessage");
-  if (!el) return;
-  el.textContent = message;
-  el.className = isError ? "auth-message error" : "auth-message success";
-}
-
-function clearChangePasswordMessage() {
-  const el = $("changePasswordMessage");
-  if (!el) return;
-  el.textContent = "";
-  el.className = "auth-message";
-}
-
-function setAdminUserMessage(message, isError = true) {
-  const el = $("adminUserMessage");
-  if (!el) return;
-  el.textContent = message;
-  el.className = isError ? "auth-message error" : "auth-message success";
-}
-
-function clearAdminUserMessage() {
-  const el = $("adminUserMessage");
+function clearMessage(id) {
+  const el = $(id);
   if (!el) return;
   el.textContent = "";
   el.className = "auth-message";
@@ -151,7 +148,6 @@ function showApp() {
 
 function translateFirebaseError(error) {
   const code = error?.code || "";
-
   switch (code) {
     case "auth/invalid-email":
       return "Email inválido.";
@@ -177,6 +173,16 @@ function translateFirebaseError(error) {
   }
 }
 
+function translateCallableError(error) {
+  const message = error?.message || "";
+
+  if (message.includes("permission-denied")) return "Você não tem permissão para essa ação.";
+  if (message.includes("already-exists")) return "Já existe um usuário com esse email.";
+  if (message.includes("invalid-argument")) return "Dados inválidos. Revise os campos.";
+  if (message.includes("not-found")) return "Registro não encontrado.";
+  return message || "Erro ao processar a ação.";
+}
+
 function isValidIpOrHost(value) {
   const raw = String(value || "").trim();
   if (!raw) return true;
@@ -195,11 +201,7 @@ function isValidIpOrHost(value) {
 function normalizeSwitchUrl(ip) {
   const value = String(ip || "").trim();
   if (!value) return "";
-
-  if (/^https?:\/\//i.test(value)) {
-    return value;
-  }
-
+  if (/^https?:\/\//i.test(value)) return value;
   return `http://${value}`;
 }
 
@@ -211,11 +213,16 @@ let currentUserProfile = null;
 let currentContractId = "";
 let currentContractNameMap = {};
 let switches = [];
+let users = [];
+let contracts = [];
 let editingSwitchId = null;
 let editingPortIndex = null;
 let switchEditingId = null;
+let editingUserId = null;
 let unsubscribeUserProfile = null;
 let unsubscribeSwitches = null;
+let unsubscribeUsers = null;
+let unsubscribeContracts = null;
 let expandedState = {};
 
 /* =========================================================
@@ -231,6 +238,16 @@ function cleanupListeners() {
     unsubscribeSwitches();
     unsubscribeSwitches = null;
   }
+
+  if (unsubscribeUsers) {
+    unsubscribeUsers();
+    unsubscribeUsers = null;
+  }
+
+  if (unsubscribeContracts) {
+    unsubscribeContracts();
+    unsubscribeContracts = null;
+  }
 }
 
 /* =========================================================
@@ -238,7 +255,6 @@ function cleanupListeners() {
 ========================================================= */
 async function loadContractNames(contractIds) {
   const map = {};
-
   await Promise.all(
     contractIds.map(async (id) => {
       try {
@@ -253,7 +269,6 @@ async function loadContractNames(contractIds) {
       }
     })
   );
-
   currentContractNameMap = map;
 }
 
@@ -261,18 +276,18 @@ function renderContractOptions() {
   const contractSelect = $("contractSelect");
   if (!contractSelect) return;
 
-  const contracts = Array.isArray(currentUserProfile?.contracts)
+  const allowedContracts = Array.isArray(currentUserProfile?.contracts)
     ? currentUserProfile.contracts
     : [];
 
-  if (!contracts.length) {
+  if (!allowedContracts.length) {
     contractSelect.innerHTML = `<option value="">Nenhum contrato liberado</option>`;
     contractSelect.disabled = true;
     return;
   }
 
   contractSelect.disabled = false;
-  contractSelect.innerHTML = contracts.map((contractId) => {
+  contractSelect.innerHTML = allowedContracts.map((contractId) => {
     const name = currentContractNameMap[contractId] || formatContractId(contractId);
     return `<option value="${escapeHtml(contractId)}">${escapeHtml(name)}</option>`;
   }).join("");
@@ -281,11 +296,11 @@ function renderContractOptions() {
 }
 
 function ensureAllowedContract() {
-  const contracts = Array.isArray(currentUserProfile?.contracts)
+  const allowedContracts = Array.isArray(currentUserProfile?.contracts)
     ? currentUserProfile.contracts
     : [];
 
-  if (!contracts.length) {
+  if (!allowedContracts.length) {
     currentContractId = "";
     switches = [];
     renderContractOptions();
@@ -294,12 +309,85 @@ function ensureAllowedContract() {
     return false;
   }
 
-  if (!contracts.includes(currentContractId)) {
-    currentContractId = contracts[0];
+  if (!allowedContracts.includes(currentContractId)) {
+    currentContractId = allowedContracts[0];
   }
 
   renderContractOptions();
   return true;
+}
+
+function buildContractsChecksHtml(list, selectedContracts = []) {
+  if (!list.length) {
+    return `<p class="auth-message error">Nenhum contrato cadastrado.</p>`;
+  }
+
+  return list.map(contract => `
+    <label>
+      <input
+        type="checkbox"
+        value="${escapeHtml(contract.id)}"
+        ${selectedContracts.includes(contract.id) ? "checked" : ""}
+      >
+      ${escapeHtml(contract.name || formatContractId(contract.id))}
+    </label>
+  `).join("");
+}
+
+function getCheckedValues(containerId) {
+  const container = $(containerId);
+  if (!container) return [];
+  return Array.from(container.querySelectorAll('input[type="checkbox"]:checked'))
+    .map(input => input.value);
+}
+
+function renderAdminContractsChecks() {
+  const html = buildContractsChecksHtml(contracts, []);
+  if ($("adminContractsChecks")) $("adminContractsChecks").innerHTML = html;
+}
+
+function renderEditContractsChecks(selectedContracts = []) {
+  const html = buildContractsChecksHtml(contracts, selectedContracts);
+  if ($("editContractsChecks")) $("editContractsChecks").innerHTML = html;
+}
+
+function renderContractsList() {
+  const list = $("contractsList");
+  if (!list) return;
+
+  if (!contracts.length) {
+    list.innerHTML = `
+      <div class="empty-state">
+        <h3>Nenhum contrato</h3>
+        <p>Cadastre o primeiro contrato.</p>
+      </div>
+    `;
+    return;
+  }
+
+  list.innerHTML = contracts.map(contract => `
+    <div class="admin-card">
+      <h5>${escapeHtml(contract.name || formatContractId(contract.id))}</h5>
+      <p><strong>ID:</strong> ${escapeHtml(contract.id)}</p>
+      <div class="actions-row">
+        <button class="btn btn-danger" onclick="deleteContract('${contract.id}')">Excluir</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+function subscribeContracts() {
+  const q = query(collection(db, "contracts"), orderBy("name"));
+  unsubscribeContracts = onSnapshot(q, (snapshot) => {
+    contracts = snapshot.docs.map(docSnap => ({
+      id: docSnap.id,
+      ...docSnap.data()
+    }));
+
+    renderContractsList();
+    renderAdminContractsChecks();
+    renderEditContractsChecks(editingUserId ? (users.find(u => u.id === editingUserId)?.contracts || []) : []);
+  });
 }
 
 /* =========================================================
@@ -341,10 +429,82 @@ function subscribeUserProfile(uid) {
     showApp();
 
     const ok = ensureAllowedContract();
-    if (!ok) return;
+    if (ok) subscribeSwitches(currentContractId);
 
-    subscribeSwitches(currentContractId);
+    if (isCurrentUserAdmin()) {
+      subscribeUsers();
+      subscribeContracts();
+    }
   });
+}
+
+/* =========================================================
+   USUÁRIOS
+========================================================= */
+function subscribeUsers() {
+  if (unsubscribeUsers) {
+    unsubscribeUsers();
+    unsubscribeUsers = null;
+  }
+
+  const q = query(collection(db, "users"), orderBy("name"));
+  unsubscribeUsers = onSnapshot(q, (snapshot) => {
+    users = snapshot.docs.map(docSnap => ({
+      id: docSnap.id,
+      ...docSnap.data()
+    }));
+    renderUsersList();
+  });
+}
+
+function renderUsersList() {
+  const list = $("usersList");
+  if (!list) return;
+
+  if (!users.length) {
+    list.innerHTML = `
+      <div class="empty-state">
+        <h3>Nenhum usuário</h3>
+        <p>Cadastre o primeiro usuário.</p>
+      </div>
+    `;
+    return;
+  }
+
+  list.innerHTML = users.map(user => {
+    const userContracts = Array.isArray(user.contracts) ? user.contracts : [];
+    return `
+      <div class="admin-card">
+        <h5>${escapeHtml(user.name || "Sem nome")}</h5>
+        <p><strong>Email:</strong> ${escapeHtml(user.email || "-")}</p>
+        <p>
+          <span class="badge-inline ${user.isAdmin ? "badge-admin" : "badge-user"}">
+            ${user.isAdmin ? "Administrador" : "Usuário"}
+          </span>
+        </p>
+        <p><strong>Troca senha no login:</strong> ${user.mustChangePassword ? "Sim" : "Não"}</p>
+        <p>
+          <strong>Contratos:</strong><br>
+          ${userContracts.length
+            ? userContracts.map(contractId => `
+                <span class="badge-inline badge-contract">
+                  ${escapeHtml(getContractName(contractId))}
+                </span>
+              `).join("")
+            : "Nenhum"}
+        </p>
+        <div class="actions-row">
+          <button class="btn btn-outline" onclick="openEditUserModal('${user.id}')">Editar</button>
+          <button class="btn btn-danger" onclick="removeUser('${user.id}')">Excluir</button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function getContractName(contractId) {
+  const contract = contracts.find(item => item.id === contractId);
+  return contract?.name || currentContractNameMap[contractId] || formatContractId(contractId);
 }
 
 /* =========================================================
@@ -392,13 +552,13 @@ function subscribeSwitches(contractId) {
 ========================================================= */
 $("authForm")?.addEventListener("submit", async function (e) {
   e.preventDefault();
-  clearAuthMessage();
+  clearMessage("authMessage");
 
   const email = $("authEmail")?.value.trim() || "";
   const password = $("authPassword")?.value || "";
 
   if (!email || !password) {
-    setAuthMessage("Preencha email e senha.");
+    setMessage("authMessage", "Preencha email e senha.");
     return;
   }
 
@@ -406,7 +566,7 @@ $("authForm")?.addEventListener("submit", async function (e) {
     await signInWithEmailAndPassword(auth, email, password);
     $("authForm")?.reset();
   } catch (error) {
-    setAuthMessage(translateFirebaseError(error), true);
+    setMessage("authMessage", translateFirebaseError(error), true);
   }
 });
 
@@ -420,23 +580,23 @@ $("logoutBtn")?.addEventListener("click", async function () {
 
 $("changePasswordForm")?.addEventListener("submit", async function (e) {
   e.preventDefault();
-  clearChangePasswordMessage();
+  clearMessage("changePasswordMessage");
 
   const newPassword = $("newPassword")?.value || "";
   const confirmPassword = $("confirmNewPassword")?.value || "";
 
   if (!newPassword || !confirmPassword) {
-    setChangePasswordMessage("Preencha os dois campos.");
+    setMessage("changePasswordMessage", "Preencha os dois campos.");
     return;
   }
 
   if (newPassword.length < 6) {
-    setChangePasswordMessage("A nova senha precisa ter pelo menos 6 caracteres.");
+    setMessage("changePasswordMessage", "A nova senha precisa ter pelo menos 6 caracteres.");
     return;
   }
 
   if (newPassword !== confirmPassword) {
-    setChangePasswordMessage("As senhas não coincidem.");
+    setMessage("changePasswordMessage", "As senhas não coincidem.");
     return;
   }
 
@@ -451,10 +611,10 @@ $("changePasswordForm")?.addEventListener("submit", async function (e) {
     }
 
     $("changePasswordForm")?.reset();
-    setChangePasswordMessage("Senha alterada com sucesso!", false);
+    setMessage("changePasswordMessage", "Senha alterada com sucesso!", false);
     showApp();
   } catch (error) {
-    setChangePasswordMessage(translateFirebaseError(error), true);
+    setMessage("changePasswordMessage", translateFirebaseError(error), true);
   }
 });
 
@@ -466,10 +626,13 @@ onAuthStateChanged(auth, (user) => {
   currentContractId = "";
   currentContractNameMap = {};
   switches = [];
+  users = [];
+  contracts = [];
   expandedState = {};
   switchEditingId = null;
   editingSwitchId = null;
   editingPortIndex = null;
+  editingUserId = null;
 
   if (user) {
     subscribeUserProfile(user.uid);
@@ -500,7 +663,7 @@ $("contractSelect")?.addEventListener("change", function () {
 $("searchInput")?.addEventListener("input", renderSwitches);
 
 /* =========================================================
-   RENDER
+   RENDER SWITCHES
 ========================================================= */
 function renderSwitches() {
   const container = $("switchesContainer");
@@ -628,7 +791,7 @@ function updateStats() {
 }
 
 /* =========================================================
-   AÇÕES
+   SWITCH ACTIONS
 ========================================================= */
 window.toggleSwitch = function (id) {
   expandedState[id] = !expandedState[id];
@@ -647,11 +810,11 @@ window.editSwitch = function (id) {
 
   switchEditingId = id;
 
-  if ($("editSwitchName")) $("editSwitchName").value = sw.name || "";
-  if ($("editSwitchLocation")) $("editSwitchLocation").value = sw.location || "";
-  if ($("editSwitchModel")) $("editSwitchModel").value = sw.model || "";
-  if ($("editSwitchIp")) $("editSwitchIp").value = sw.ip || "";
-  if ($("editSwitchObs")) $("editSwitchObs").value = sw.obs || "";
+  $("editSwitchName").value = sw.name || "";
+  $("editSwitchLocation").value = sw.location || "";
+  $("editSwitchModel").value = sw.model || "";
+  $("editSwitchIp").value = sw.ip || "";
+  $("editSwitchObs").value = sw.obs || "";
 
   $("editSwitchModal")?.classList.add("show");
 };
@@ -693,12 +856,12 @@ window.openPortModal = function (switchId, portIndex) {
   const port = Array.isArray(sw.ports) ? sw.ports[portIndex] : null;
   if (!port) return;
 
-  if ($("modalTitle")) $("modalTitle").textContent = `${sw.name} - Porta ${port.number}`;
-  if ($("portDevice")) $("portDevice").value = port.device || "";
-  if ($("portStatus")) $("portStatus").value = port.status || "inativo";
-  if ($("portIp")) $("portIp").value = port.ip || "";
-  if ($("portSector")) $("portSector").value = port.sector || "";
-  if ($("portObs")) $("portObs").value = port.obs || "";
+  $("modalTitle").textContent = `${sw.name} - Porta ${port.number}`;
+  $("portDevice").value = port.device || "";
+  $("portStatus").value = port.status || "inativo";
+  $("portIp").value = port.ip || "";
+  $("portSector").value = port.sector || "";
+  $("portObs").value = port.obs || "";
 
   $("portModal")?.classList.add("show");
 };
@@ -711,11 +874,11 @@ window.closeModal = function () {
 };
 
 window.clearPortData = function () {
-  if ($("portDevice")) $("portDevice").value = "";
-  if ($("portStatus")) $("portStatus").value = "inativo";
-  if ($("portIp")) $("portIp").value = "";
-  if ($("portSector")) $("portSector").value = "";
-  if ($("portObs")) $("portObs").value = "";
+  $("portDevice").value = "";
+  $("portStatus").value = "inativo";
+  $("portIp").value = "";
+  $("portSector").value = "";
+  $("portObs").value = "";
 };
 
 /* =========================================================
@@ -762,7 +925,7 @@ $("switchForm")?.addEventListener("submit", async function (e) {
     });
 
     this.reset();
-    if ($("switchPorts")) $("switchPorts").value = "24";
+    $("switchPorts").value = "24";
   } catch (error) {
     console.error(error);
     alert("Erro ao salvar switch.");
@@ -916,8 +1079,6 @@ async function importData(event) {
       const batch = writeBatch(db);
 
       for (const sw of importedSwitches) {
-        const importedIp = String(sw.ip || "").trim();
-
         const ref = doc(collection(db, "contracts", currentContractId, "switches"));
         batch.set(ref, {
           localId: generateId(),
@@ -925,7 +1086,7 @@ async function importData(event) {
           location: String(sw.location || "").trim(),
           portsCount: Number(sw.portsCount || (Array.isArray(sw.ports) ? sw.ports.length : 24)),
           model: String(sw.model || "").trim(),
-          ip: importedIp,
+          ip: String(sw.ip || "").trim(),
           obs: String(sw.obs || "").trim(),
           expanded: false,
           ports: Array.isArray(sw.ports)
@@ -953,15 +1114,19 @@ async function importData(event) {
    MODAIS
 ========================================================= */
 $("portModal")?.addEventListener("click", function (e) {
-  if (e.target.id === "portModal") {
-    closeModal();
-  }
+  if (e.target.id === "portModal") closeModal();
 });
 
 $("editSwitchModal")?.addEventListener("click", function (e) {
-  if (e.target.id === "editSwitchModal") {
-    closeEditSwitchModal();
-  }
+  if (e.target.id === "editSwitchModal") closeEditSwitchModal();
+});
+
+$("adminModal")?.addEventListener("click", function (e) {
+  if (e.target.id === "adminModal") closeAdminModal();
+});
+
+$("editUserModal")?.addEventListener("click", function (e) {
+  if (e.target.id === "editUserModal") closeEditUserModal();
 });
 
 /* =========================================================
@@ -973,84 +1138,254 @@ function isCurrentUserAdmin() {
 
 function openAdminModal() {
   if (!isCurrentUserAdmin()) {
-    alert("Apenas administradores podem acessar as configurações.");
+    alert("Apenas administradores podem acessar os acessos.");
     return;
   }
 
-  clearAdminUserMessage();
+  clearMessage("adminUserMessage");
+  clearMessage("contractMessage");
+  renderAdminContractsChecks();
+  renderContractsList();
+  renderUsersList();
+
   $("adminModal")?.classList.add("show");
 }
 
 window.closeAdminModal = function () {
   $("adminModal")?.classList.remove("show");
   $("adminUserForm")?.reset();
-  clearAdminUserMessage();
+  $("contractForm")?.reset();
+  clearMessage("adminUserMessage");
+  clearMessage("contractMessage");
 };
 
 $("adminBtn")?.addEventListener("click", openAdminModal);
 
-$("adminModal")?.addEventListener("click", function (e) {
-  if (e.target.id === "adminModal") {
-    closeAdminModal();
+/* =========================================================
+   CRUD CONTRATOS
+========================================================= */
+$("contractForm")?.addEventListener("submit", async function (e) {
+  e.preventDefault();
+
+  if (!isCurrentUserAdmin()) {
+    setMessage("contractMessage", "Apenas administradores podem criar contratos.");
+    return;
+  }
+
+  clearMessage("contractMessage");
+
+  const contractName = $("contractName")?.value.trim() || "";
+  const rawContractId = $("contractId")?.value.trim() || "";
+  const contractId = normalizeContractId(rawContractId);
+
+  if (!contractName || !contractId) {
+    setMessage("contractMessage", "Informe nome e ID do contrato.");
+    return;
+  }
+
+  try {
+    await setDoc(doc(db, "contracts", contractId), {
+      name: contractName,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+
+    this.reset();
+    setMessage("contractMessage", "Contrato cadastrado com sucesso.", false);
+  } catch (error) {
+    console.error(error);
+    setMessage("contractMessage", "Erro ao cadastrar contrato.");
   }
 });
 
+window.deleteContract = async function (contractId) {
+  if (!isCurrentUserAdmin()) {
+    alert("Apenas administradores podem excluir contratos.");
+    return;
+  }
+
+  const confirmed = confirm(`Deseja excluir o contrato "${getContractName(contractId)}"?`);
+  if (!confirmed) return;
+
+  try {
+    await deleteDoc(doc(db, "contracts", contractId));
+    alert("Contrato excluído.");
+  } catch (error) {
+    console.error(error);
+    alert("Erro ao excluir contrato. Verifique se não existem dependências.");
+  }
+};
+
+/* =========================================================
+   CRUD USUÁRIOS
+========================================================= */
 $("adminUserForm")?.addEventListener("submit", async function (e) {
   e.preventDefault();
 
   if (!isCurrentUserAdmin()) {
-    setAdminUserMessage("Apenas administradores podem cadastrar usuários.");
+    setMessage("adminUserMessage", "Apenas administradores podem cadastrar usuários.");
     return;
   }
 
-  clearAdminUserMessage();
+  clearMessage("adminUserMessage");
 
   const name = $("adminUserName")?.value.trim() || "";
   const email = $("adminUserEmail")?.value.trim() || "";
   const password = $("adminUserPassword")?.value || "";
   const isAdmin = $("adminUserIsAdmin")?.value === "true";
   const mustChangePassword = $("adminMustChangePassword")?.value === "true";
-
-  const contracts = Array.from(document.querySelectorAll(".admin-contract-check:checked"))
-    .map(input => input.value);
+  const selectedContracts = getCheckedValues("adminContractsChecks");
 
   if (!name || !email || !password) {
-    setAdminUserMessage("Preencha nome, email e senha inicial.");
+    setMessage("adminUserMessage", "Preencha nome, email e senha.");
     return;
   }
 
-  if (!contracts.length) {
-    setAdminUserMessage("Selecione ao menos um contrato.");
+  if (password.length < 6) {
+    setMessage("adminUserMessage", "A senha precisa ter pelo menos 6 caracteres.");
+    return;
+  }
+
+  if (!selectedContracts.length) {
+    setMessage("adminUserMessage", "Selecione ao menos um contrato.");
     return;
   }
 
   try {
-    const fakeUid = `pending_${generateId()}`;
+    await fnCreateManagedUser({
+      name,
+      email,
+      password,
+      isAdmin,
+      contracts: selectedContracts,
+      mustChangePassword
+    });
 
-    await setDoc(doc(db, "users", fakeUid), {
+    this.reset();
+    renderAdminContractsChecks();
+    setMessage("adminUserMessage", "Usuário criado com sucesso.", false);
+  } catch (error) {
+    console.error(error);
+    setMessage("adminUserMessage", translateCallableError(error), true);
+  }
+};
+
+window.openEditUserModal = function (userId) {
+  if (!isCurrentUserAdmin()) {
+    alert("Apenas administradores podem editar usuários.");
+    return;
+  }
+
+  const user = users.find(item => item.id === userId);
+  if (!user) return;
+
+  editingUserId = userId;
+
+  $("editUserName").value = user.name || "";
+  $("editUserEmail").value = user.email || "";
+  $("editUserIsAdmin").value = user.isAdmin ? "true" : "false";
+  $("editMustChangePassword").value = user.mustChangePassword ? "true" : "false";
+  renderEditContractsChecks(Array.isArray(user.contracts) ? user.contracts : []);
+  clearMessage("editUserMessage");
+
+  $("editUserModal")?.classList.add("show");
+};
+
+window.closeEditUserModal = function () {
+  $("editUserModal")?.classList.remove("show");
+  $("editUserForm")?.reset();
+  clearMessage("editUserMessage");
+  editingUserId = null;
+};
+
+$("editUserForm")?.addEventListener("submit", async function (e) {
+  e.preventDefault();
+
+  if (!editingUserId) {
+    setMessage("editUserMessage", "Nenhum usuário selecionado.");
+    return;
+  }
+
+  const name = $("editUserName")?.value.trim() || "";
+  const email = $("editUserEmail")?.value.trim() || "";
+  const isAdmin = $("editUserIsAdmin")?.value === "true";
+  const mustChangePassword = $("editMustChangePassword")?.value === "true";
+  const selectedContracts = getCheckedValues("editContractsChecks");
+
+  if (!name || !email) {
+    setMessage("editUserMessage", "Preencha nome e email.");
+    return;
+  }
+
+  if (!selectedContracts.length) {
+    setMessage("editUserMessage", "Selecione ao menos um contrato.");
+    return;
+  }
+
+  try {
+    await fnUpdateManagedUser({
+      uid: editingUserId,
       name,
       email,
       isAdmin,
-      mustChangePassword,
-      contracts,
-      tempPassword: password,
-      status: "pending-auth-creation",
-      createdBy: currentUser?.uid || null,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp()
+      contracts: selectedContracts,
+      mustChangePassword
     });
 
-    setAdminUserMessage(
-      "Cadastro salvo no Firestore com sucesso. Próximo passo: criar esse usuário no Firebase Authentication.",
-      false
-    );
-
-    this.reset();
+    setMessage("editUserMessage", "Usuário atualizado com sucesso.", false);
   } catch (error) {
     console.error(error);
-    setAdminUserMessage("Erro ao salvar cadastro do usuário.");
+    setMessage("editUserMessage", translateCallableError(error), true);
   }
 });
+
+$("resetPasswordBtn")?.addEventListener("click", async function () {
+  if (!editingUserId) {
+    setMessage("editUserMessage", "Nenhum usuário selecionado.");
+    return;
+  }
+
+  const newPassword = prompt("Digite a nova senha do usuário:");
+  if (newPassword === null) return;
+
+  if (String(newPassword).trim().length < 6) {
+    setMessage("editUserMessage", "A nova senha precisa ter pelo menos 6 caracteres.");
+    return;
+  }
+
+  try {
+    await fnResetManagedUserPassword({
+      uid: editingUserId,
+      newPassword: String(newPassword).trim()
+    });
+
+    setMessage("editUserMessage", "Senha redefinida com sucesso.", false);
+  } catch (error) {
+    console.error(error);
+    setMessage("editUserMessage", translateCallableError(error), true);
+  }
+});
+
+window.removeUser = async function (userId) {
+  if (!isCurrentUserAdmin()) {
+    alert("Apenas administradores podem excluir usuários.");
+    return;
+  }
+
+  const user = users.find(item => item.id === userId);
+  if (!user) return;
+
+  const confirmed = confirm(`Deseja realmente excluir o usuário "${user.name}"?`);
+  if (!confirmed) return;
+
+  try {
+    await fnDeleteManagedUser({ uid: userId });
+    alert("Usuário excluído com sucesso.");
+  } catch (error) {
+    console.error(error);
+    alert(translateCallableError(error));
+  }
+};
 
 /* =========================================================
    INÍCIO
