@@ -32,12 +32,12 @@ import {
    FIREBASE
 ========================================================= */
 const firebaseConfig = {
-  apiKey: "SUA_API_KEY",
-  authDomain: "SEU_AUTH_DOMAIN",
-  projectId: "SEU_PROJECT_ID",
-  storageBucket: "SEU_STORAGE_BUCKET",
-  messagingSenderId: "SEU_MESSAGING_SENDER_ID",
-  appId: "SEU_APP_ID"
+  apiKey: "AIzaSyCeiZSLoTFyGEyOFTLcH4FCPJI_-YV8pmM",
+  authDomain: "switchs-f8ca3.firebaseapp.com",
+  projectId: "switchs-f8ca3",
+  storageBucket: "switchs-f8ca3.firebasestorage.app",
+  messagingSenderId: "24056268906",
+  appId: "1:24056268906:web:d07426f51252c20d95e213"
 };
 
 const app = initializeApp(firebaseConfig);
