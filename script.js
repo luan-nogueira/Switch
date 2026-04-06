@@ -190,7 +190,7 @@ function translateCallableError(error) {
       return "Já existe um usuário com esse email.";
 
     case "functions/invalid-argument":
-      return message || "Dados inválidos. Revise os campos.";
+      return message || "Dados inválidos.";
 
     case "functions/not-found":
       return "Registro não encontrado.";
@@ -199,16 +199,15 @@ function translateCallableError(error) {
       return message || "Operação não permitida.";
 
     case "functions/unauthenticated":
-      return "Sua sessão expirou. Faça login novamente.";
+      return "Faça login novamente.";
 
     case "functions/internal":
-      return message || "Erro interno ao processar a ação.";
+      return message || "Erro interno no servidor.";
 
     default:
-      return message || "Erro ao processar a ação.";
+      return message || "Erro desconhecido.";
   }
 }
-
 function isValidIpOrHost(value) {
   const raw = String(value || "").trim();
   if (!raw) return true;
