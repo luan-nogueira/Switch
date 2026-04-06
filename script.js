@@ -412,10 +412,16 @@ function subscribeContracts() {
       renderContractsList();
       renderAdminContractsChecks();
       renderEditContractsChecks(editingUserId ? (users.find(u => u.id === editingUserId)?.contracts || []) : []);
-    },
-    (error) => {
-      console.error("Erro ao carregar contratos:", error);
-    }
+(error) => {
+  console.error("ERRO REAL AO CARREGAR SWITCHES:", error);
+  console.error("Código:", error?.code);
+  console.error("Mensagem:", error?.message);
+  console.error("Contrato atual:", contractId);
+  console.error("UID atual:", auth.currentUser?.uid);
+  console.error("Contratos do usuário:", currentUserProfile?.contracts || []);
+
+  alert(`Erro ao carregar switches: ${error?.code || "desconhecido"} - ${error?.message || "sem mensagem"}`);
+}
   );
 }
 
