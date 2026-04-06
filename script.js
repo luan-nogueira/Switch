@@ -698,54 +698,9 @@ $("contractSelect")?.addEventListener("change", function () {
     return;
   }
 
-function subscribeSwitches(contractId) {
-  if (!contractId) {
-    switches = [];
-    renderSwitches();
-    updateStats();
-    return;
-  }
+  subscribeSwitches(currentContractId);
+});
 
-  if (unsubscribeSwitches) {
-    unsubscribeSwitches();
-    unsubscribeSwitches = null;
-  }
-
-  console.log("Tentando carregar switches do contrato:", contractId);
-  console.log("Usuário atual:", auth.currentUser?.uid);
-  console.log("Contratos do perfil:", currentUserProfile?.contracts || []);
-
-  const q = query(
-    collection(db, "contracts", contractId, "switches"),
-    orderBy("name")
-  );
-
-  unsubscribeSwitches = onSnapshot(
-    q,
-    (snapshot) => {
-      console.log("Switches carregados com sucesso:", snapshot.size);
-
-      switches = snapshot.docs.map((docSnap) => ({
-        id: docSnap.id,
-        ...docSnap.data(),
-        expanded: !!expandedState[docSnap.id]
-      }));
-
-      renderSwitches();
-      updateStats();
-    },
-    (error) => {
-      console.error("ERRO REAL AO CARREGAR SWITCHES:", error);
-      console.error("Código:", error?.code);
-      console.error("Mensagem:", error?.message);
-      console.error("Contrato atual:", contractId);
-      console.error("UID atual:", auth.currentUser?.uid);
-      console.error("Contratos do usuário:", currentUserProfile?.contracts || []);
-
-      alert(`Erro ao carregar switches: ${error?.code || "desconhecido"} - ${error?.message || "sem mensagem"}`);
-    }
-  );
-}
 /* =========================================================
    BUSCA
 ========================================================= */
