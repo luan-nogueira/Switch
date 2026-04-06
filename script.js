@@ -179,14 +179,34 @@ function translateFirebaseError(error) {
 }
 
 function translateCallableError(error) {
+  const code = error?.code || "";
   const message = error?.message || "";
 
-  if (message.includes("permission-denied")) return "Você não tem permissão para essa ação.";
-  if (message.includes("already-exists")) return "Já existe um usuário com esse email.";
-  if (message.includes("invalid-argument")) return "Dados inválidos. Revise os campos.";
-  if (message.includes("not-found")) return "Registro não encontrado.";
-  if (message.includes("failed-precondition")) return "Operação não permitida.";
-  return message || "Erro ao processar a ação.";
+  switch (code) {
+    case "functions/permission-denied":
+      return "Você não tem permissão para essa ação.";
+
+    case "functions/already-exists":
+      return "Já existe um usuário com esse email.";
+
+    case "functions/invalid-argument":
+      return message || "Dados inválidos. Revise os campos.";
+
+    case "functions/not-found":
+      return "Registro não encontrado.";
+
+    case "functions/failed-precondition":
+      return message || "Operação não permitida.";
+
+    case "functions/unauthenticated":
+      return "Sua sessão expirou. Faça login novamente.";
+
+    case "functions/internal":
+      return message || "Erro interno ao processar a ação.";
+
+    default:
+      return message || "Erro ao processar a ação.";
+  }
 }
 
 function isValidIpOrHost(value) {
