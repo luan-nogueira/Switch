@@ -764,3 +764,13 @@ textarea {
     gap: 10px;
   }
 }
+#adminModal .modal-content,
+#adminModal .admin-modal-content {
+  max-height: calc(100vh - 24px);
+}
+
+#adminModal .modal-body,
+#adminModal .admin-body {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
