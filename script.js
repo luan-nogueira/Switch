@@ -401,6 +401,7 @@ function subscribeContracts() {
   }
 
   const q = query(collection(db, "contracts"), orderBy("name"));
+
   unsubscribeContracts = onSnapshot(
     q,
     (snapshot) => {
@@ -411,20 +412,17 @@ function subscribeContracts() {
 
       renderContractsList();
       renderAdminContractsChecks();
-      renderEditContractsChecks(editingUserId ? (users.find(u => u.id === editingUserId)?.contracts || []) : []);
-(error) => {
-  console.error("ERRO REAL AO CARREGAR SWITCHES:", error);
-  console.error("Código:", error?.code);
-  console.error("Mensagem:", error?.message);
-  console.error("Contrato atual:", contractId);
-  console.error("UID atual:", auth.currentUser?.uid);
-  console.error("Contratos do usuário:", currentUserProfile?.contracts || []);
-
-  alert(`Erro ao carregar switches: ${error?.code || "desconhecido"} - ${error?.message || "sem mensagem"}`);
-}
+      renderEditContractsChecks(
+        editingUserId
+          ? (users.find(u => u.id === editingUserId)?.contracts || [])
+          : []
+      );
+    },
+    (error) => {
+      console.error("Erro ao carregar contratos:", error);
+    }
   );
 }
-
 /* =========================================================
    PERFIL DO USUÁRIO
 ========================================================= */
@@ -595,12 +593,17 @@ function subscribeSwitches(contractId) {
       updateStats();
     },
     (error) => {
-      console.error("Erro ao carregar switches:", error);
-      alert("Erro ao carregar switches do contrato selecionado.");
+      console.error("ERRO REAL AO CARREGAR SWITCHES:", error);
+      console.error("Código:", error?.code);
+      console.error("Mensagem:", error?.message);
+      console.error("Contrato atual:", contractId);
+      console.error("UID atual:", auth.currentUser?.uid);
+      console.error("Contratos do usuário:", currentUserProfile?.contracts || []);
+
+      alert(`Erro ao carregar switches: ${error?.code || "desconhecido"} - ${error?.message || "sem mensagem"}`);
     }
   );
 }
-
 /* =========================================================
    AUTH
 ========================================================= */
