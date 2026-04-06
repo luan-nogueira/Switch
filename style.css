@@ -442,6 +442,7 @@ textarea {
   justify-content: center;
   padding: 20px;
   z-index: 999;
+  overflow-y: auto;
 }
 
 .modal.show { display: flex; }
@@ -453,10 +454,16 @@ textarea {
   border-radius: 24px;
   overflow: hidden;
   box-shadow: var(--shadow);
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
 }
 
 .admin-modal-content {
   width: min(1200px, 100%);
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
 }
 
 .modal-header {
@@ -471,8 +478,16 @@ textarea {
 
 .modal-header h3 { font-size: 20px; }
 
-.modal-body { padding: 20px; }
+.modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
 
+.admin-body {
+  overflow-y: auto;
+  flex: 1;
+}
 .modal-form {
   display: flex;
   flex-direction: column;
@@ -728,11 +743,20 @@ textarea {
 
   .auth-brand h1 { font-size: 22px; }
 
-  .modal { padding: 10px; }
+  .modal {
+    padding: 10px;
+    align-items: flex-start;
+  }
 
-  .modal-content {
+  .modal-content,
+  .admin-modal-content {
     width: 100%;
+    max-height: calc(100vh - 20px);
     border-radius: 18px;
+  }
+
+  .modal-body {
+    padding: 16px;
   }
 
   .stats-inline {
