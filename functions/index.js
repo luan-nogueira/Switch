@@ -1,4 +1,4 @@
-const functions = require("firebase-functions");
+const { onCall, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 
 if (!admin.apps.length) {
@@ -17,18 +17,15 @@ function normalizeContracts(input) {
   )];
 }
 
-async function ensureAdmin(context) {
-  if (!context.auth || !context.auth.uid) {
-    throw new functions.https.HttpsError(
-      "unauthenticated",
-      "Usuário não autenticado."
-    );
+async function ensureAdmin(auth) {
+  if (!auth || !auth.uid) {
+    throw new HttpsError("unauthenticated", "Usuário não autenticado.");
   }
 
-  const snap = await db.collection("users").doc(context.auth.uid).get();
+  const snap = await db.collection("users").doc(auth.uid).get();
 
   if (!snap.exists) {
-    throw new functions.https.HttpsError(
+    throw new HttpsError(
       "permission-denied",
       "Seu usuário não possui cadastro no Firestore."
     );
@@ -37,14 +34,14 @@ async function ensureAdmin(context) {
   const data = snap.data() || {};
 
   if (data.isAdmin !== true) {
-    throw new functions.https.HttpsError(
+    throw new HttpsError(
       "permission-denied",
       "Apenas administradores podem executar esta ação."
     );
   }
 
   return {
-    uid: context.auth.uid,
+    uid: auth.uid,
     ...data
   };
 }
@@ -53,84 +50,56 @@ function toHttpsError(error, fallbackMessage) {
   const code = error?.code || "";
   const message = error?.message || fallbackMessage || "Erro interno.";
 
-  if (error instanceof functions.https.HttpsError) {
+  if (error instanceof HttpsError) {
     throw error;
   }
 
   if (code === "auth/email-already-exists") {
-    throw new functions.https.HttpsError(
-      "already-exists",
-      "Já existe um usuário com esse email."
-    );
+    throw new HttpsError("already-exists", "Já existe um usuário com esse email.");
   }
 
   if (code === "auth/user-not-found") {
-    throw new functions.https.HttpsError(
-      "not-found",
-      "Usuário não encontrado."
-    );
+    throw new HttpsError("not-found", "Usuário não encontrado.");
   }
 
   if (code === "auth/invalid-email") {
-    throw new functions.https.HttpsError(
-      "invalid-argument",
-      "Email inválido."
-    );
+    throw new HttpsError("invalid-argument", "Email inválido.");
   }
 
   if (code === "auth/invalid-password") {
-    throw new functions.https.HttpsError(
-      "invalid-argument",
-      "Senha inválida."
-    );
-  }
-
-  if (code === "permission-denied") {
-    throw new functions.https.HttpsError(
-      "permission-denied",
-      "Você não tem permissão para esta ação."
-    );
+    throw new HttpsError("invalid-argument", "Senha inválida.");
   }
 
   console.error("ERRO INTERNO:", error);
-
-  throw new functions.https.HttpsError("internal", message);
+  throw new HttpsError("internal", message);
 }
 
-/* =========================================================
-   CREATE MANAGED USER
-========================================================= */
-exports.createManagedUser = functions
-  .region("southamerica-east1")
-  .https.onCall(async (data, context) => {
-    await ensureAdmin(context);
+exports.createManagedUser = onCall(
+  {
+    region: "southamerica-east1"
+  },
+  async (request) => {
+    await ensureAdmin(request.auth);
 
-    const name = String(data?.name || "").trim();
-    const email = String(data?.email || "").trim().toLowerCase();
-    const password = String(data?.password || "");
-    const isAdmin = data?.isAdmin === true;
-    const mustChangePassword = data?.mustChangePassword === true;
-    const contracts = normalizeContracts(data?.contracts);
+    const data = request.data || {};
+
+    const name = String(data.name || "").trim();
+    const email = String(data.email || "").trim().toLowerCase();
+    const password = String(data.password || "");
+    const isAdmin = data.isAdmin === true;
+    const mustChangePassword = data.mustChangePassword === true;
+    const contracts = normalizeContracts(data.contracts);
 
     if (!name || !email || !password) {
-      throw new functions.https.HttpsError(
-        "invalid-argument",
-        "Nome, email e senha são obrigatórios."
-      );
+      throw new HttpsError("invalid-argument", "Nome, email e senha são obrigatórios.");
     }
 
     if (password.length < 6) {
-      throw new functions.https.HttpsError(
-        "invalid-argument",
-        "A senha deve ter pelo menos 6 caracteres."
-      );
+      throw new HttpsError("invalid-argument", "A senha deve ter pelo menos 6 caracteres.");
     }
 
     if (!contracts.length) {
-      throw new functions.https.HttpsError(
-        "invalid-argument",
-        "Selecione ao menos um contrato."
-      );
+      throw new HttpsError("invalid-argument", "Selecione ao menos um contrato.");
     }
 
     let userRecord = null;
@@ -158,7 +127,6 @@ exports.createManagedUser = functions
         message: "Usuário criado com sucesso."
       };
     } catch (error) {
-      // rollback se criou no Auth mas falhou ao gravar no Firestore
       if (userRecord?.uid) {
         try {
           await admin.auth().deleteUser(userRecord.uid);
@@ -169,40 +137,34 @@ exports.createManagedUser = functions
 
       toHttpsError(error, "Erro ao criar usuário.");
     }
-  });
+  }
+);
 
-/* =========================================================
-   UPDATE MANAGED USER
-========================================================= */
-exports.updateManagedUser = functions
-  .region("southamerica-east1")
-  .https.onCall(async (data, context) => {
-    const adminUser = await ensureAdmin(context);
+exports.updateManagedUser = onCall(
+  {
+    region: "southamerica-east1"
+  },
+  async (request) => {
+    const adminUser = await ensureAdmin(request.auth);
+    const data = request.data || {};
 
-    const uid = String(data?.uid || "").trim();
-    const name = String(data?.name || "").trim();
-    const email = String(data?.email || "").trim().toLowerCase();
-    const isAdmin = data?.isAdmin === true;
-    const mustChangePassword = data?.mustChangePassword === true;
-    const contracts = normalizeContracts(data?.contracts);
+    const uid = String(data.uid || "").trim();
+    const name = String(data.name || "").trim();
+    const email = String(data.email || "").trim().toLowerCase();
+    const isAdmin = data.isAdmin === true;
+    const mustChangePassword = data.mustChangePassword === true;
+    const contracts = normalizeContracts(data.contracts);
 
     if (!uid || !name || !email) {
-      throw new functions.https.HttpsError(
-        "invalid-argument",
-        "UID, nome e email são obrigatórios."
-      );
+      throw new HttpsError("invalid-argument", "UID, nome e email são obrigatórios.");
     }
 
     if (!contracts.length) {
-      throw new functions.https.HttpsError(
-        "invalid-argument",
-        "Selecione ao menos um contrato."
-      );
+      throw new HttpsError("invalid-argument", "Selecione ao menos um contrato.");
     }
 
-    // evita remover o próprio admin de forma acidental
     if (uid === adminUser.uid && isAdmin !== true) {
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         "failed-precondition",
         "Você não pode remover seu próprio perfil de administrador."
       );
@@ -233,27 +195,25 @@ exports.updateManagedUser = functions
     } catch (error) {
       toHttpsError(error, "Erro ao atualizar usuário.");
     }
-  });
+  }
+);
 
-/* =========================================================
-   DELETE MANAGED USER
-========================================================= */
-exports.deleteManagedUser = functions
-  .region("southamerica-east1")
-  .https.onCall(async (data, context) => {
-    await ensureAdmin(context);
+exports.deleteManagedUser = onCall(
+  {
+    region: "southamerica-east1"
+  },
+  async (request) => {
+    await ensureAdmin(request.auth);
+    const data = request.data || {};
 
-    const uid = String(data?.uid || "").trim();
+    const uid = String(data.uid || "").trim();
 
     if (!uid) {
-      throw new functions.https.HttpsError(
-        "invalid-argument",
-        "UID obrigatório."
-      );
+      throw new HttpsError("invalid-argument", "UID obrigatório.");
     }
 
-    if (uid === context.auth.uid) {
-      throw new functions.https.HttpsError(
+    if (uid === request.auth.uid) {
+      throw new HttpsError(
         "failed-precondition",
         "Você não pode excluir seu próprio usuário logado."
       );
@@ -277,28 +237,26 @@ exports.deleteManagedUser = functions
       ok: true,
       message: "Usuário excluído com sucesso."
     };
-  });
+  }
+);
 
-/* =========================================================
-   RESET MANAGED USER PASSWORD
-========================================================= */
-exports.resetManagedUserPassword = functions
-  .region("southamerica-east1")
-  .https.onCall(async (data, context) => {
-    await ensureAdmin(context);
+exports.resetManagedUserPassword = onCall(
+  {
+    region: "southamerica-east1"
+  },
+  async (request) => {
+    await ensureAdmin(request.auth);
+    const data = request.data || {};
 
-    const uid = String(data?.uid || "").trim();
-    const newPassword = String(data?.newPassword || "").trim();
+    const uid = String(data.uid || "").trim();
+    const newPassword = String(data.newPassword || "").trim();
 
     if (!uid || !newPassword) {
-      throw new functions.https.HttpsError(
-        "invalid-argument",
-        "UID e nova senha são obrigatórios."
-      );
+      throw new HttpsError("invalid-argument", "UID e nova senha são obrigatórios.");
     }
 
     if (newPassword.length < 6) {
-      throw new functions.https.HttpsError(
+      throw new HttpsError(
         "invalid-argument",
         "A nova senha deve ter pelo menos 6 caracteres."
       );
@@ -324,4 +282,5 @@ exports.resetManagedUserPassword = functions
     } catch (error) {
       toHttpsError(error, "Erro ao redefinir senha.");
     }
-  });
+  }
+);
