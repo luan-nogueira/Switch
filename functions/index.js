@@ -7,6 +7,9 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
+/* =========================================================
+   HELPERS
+========================================================= */
 function normalizeContracts(input) {
   if (!Array.isArray(input)) return [];
 
@@ -90,13 +93,16 @@ function toHttpsError(error, fallbackMessage) {
   if (code === "auth/insufficient-permission") {
     throw new HttpsError(
       "permission-denied",
-      "A Cloud Function não tem permissão suficiente para criar usuários."
+      "A Cloud Function não tem permissão suficiente para executar esta ação."
     );
   }
 
   throw new HttpsError("internal", message || "Erro interno real no servidor.");
 }
 
+/* =========================================================
+   CREATE USER
+========================================================= */
 exports.createManagedUser = onCall(
   {
     region: "southamerica-east1",
@@ -197,6 +203,9 @@ exports.createManagedUser = onCall(
   }
 );
 
+/* =========================================================
+   UPDATE USER
+========================================================= */
 exports.updateManagedUser = onCall(
   {
     region: "southamerica-east1",
@@ -262,6 +271,9 @@ exports.updateManagedUser = onCall(
   }
 );
 
+/* =========================================================
+   DELETE USER
+========================================================= */
 exports.deleteManagedUser = onCall(
   {
     region: "southamerica-east1",
@@ -305,6 +317,9 @@ exports.deleteManagedUser = onCall(
   }
 );
 
+/* =========================================================
+   RESET PASSWORD
+========================================================= */
 exports.resetManagedUserPassword = onCall(
   {
     region: "southamerica-east1",
