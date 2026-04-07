@@ -7,9 +7,6 @@ if (!admin.apps.length) {
 
 const db = admin.firestore();
 
-/* =========================================================
-   HELPERS
-========================================================= */
 function normalizeContracts(input) {
   if (!Array.isArray(input)) return [];
 
@@ -100,11 +97,11 @@ function toHttpsError(error, fallbackMessage) {
   throw new HttpsError("internal", message || "Erro interno real no servidor.");
 }
 
-/* =========================================================
-   CREATE USER
-========================================================= */
 exports.createManagedUser = onCall(
-  { region: "southamerica-east1" },
+  {
+    region: "southamerica-east1",
+    cors: true
+  },
   async (request) => {
     await ensureAdmin(request.auth);
 
@@ -140,7 +137,6 @@ exports.createManagedUser = onCall(
     let userRecord = null;
 
     try {
-      // Verifica antes se o email já existe no Authentication
       try {
         const existingUser = await admin.auth().getUserByEmail(email);
 
@@ -160,14 +156,12 @@ exports.createManagedUser = onCall(
         }
       }
 
-      // Cria no Authentication
       userRecord = await admin.auth().createUser({
         email,
         password,
         displayName: name
       });
 
-      // Salva no Firestore
       await db.collection("users").doc(userRecord.uid).set({
         name,
         email,
@@ -190,7 +184,6 @@ exports.createManagedUser = onCall(
         stack: error?.stack
       });
 
-      // rollback se criou no auth mas falhou depois
       if (userRecord?.uid) {
         try {
           await admin.auth().deleteUser(userRecord.uid);
@@ -204,11 +197,11 @@ exports.createManagedUser = onCall(
   }
 );
 
-/* =========================================================
-   UPDATE USER
-========================================================= */
 exports.updateManagedUser = onCall(
-  { region: "southamerica-east1" },
+  {
+    region: "southamerica-east1",
+    cors: true
+  },
   async (request) => {
     const adminUser = await ensureAdmin(request.auth);
     const data = request.data || {};
@@ -269,11 +262,11 @@ exports.updateManagedUser = onCall(
   }
 );
 
-/* =========================================================
-   DELETE USER
-========================================================= */
 exports.deleteManagedUser = onCall(
-  { region: "southamerica-east1" },
+  {
+    region: "southamerica-east1",
+    cors: true
+  },
   async (request) => {
     await ensureAdmin(request.auth);
     const data = request.data || {};
@@ -312,11 +305,11 @@ exports.deleteManagedUser = onCall(
   }
 );
 
-/* =========================================================
-   RESET PASSWORD
-========================================================= */
 exports.resetManagedUserPassword = onCall(
-  { region: "southamerica-east1" },
+  {
+    region: "southamerica-east1",
+    cors: true
+  },
   async (request) => {
     await ensureAdmin(request.auth);
     const data = request.data || {};
