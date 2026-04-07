@@ -46,12 +46,47 @@ const db = getFirestore(app);
 const functions = getFunctions(app, "southamerica-east1");
 
 /* =========================================================
-   CALLABLE FUNCTIONS
+   FUNCTIONS
 ========================================================= */
-const fnCreateManagedUser = httpsCallable(functions, "createManagedUser");
 const fnUpdateManagedUser = httpsCallable(functions, "updateManagedUser");
 const fnDeleteManagedUser = httpsCallable(functions, "deleteManagedUser");
 const fnResetManagedUserPassword = httpsCallable(functions, "resetManagedUserPassword");
+
+async function createManagedUserRequest(payload) {
+  const user = auth.currentUser;
+
+  if (!user) {
+    throw new Error("Usuário não autenticado.");
+  }
+
+  const idToken = await user.getIdToken(true);
+
+  const response = await fetch(
+    "https://southamerica-east1-switchs-f8ca3.cloudfunctions.net/createManagedUser",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${idToken}`
+      },
+      body: JSON.stringify(payload)
+    }
+  );
+
+  let result = null;
+
+  try {
+    result = await response.json();
+  } catch {
+    result = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(result?.error || "Erro ao criar usuário.");
+  }
+
+  return result;
+}
 
 /* =========================================================
    HELPERS
@@ -97,7 +132,7 @@ function formatContractId(id) {
   if (!raw) return "";
   return raw
     .split(/[-_\s]+/)
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 }
 
@@ -185,29 +220,23 @@ function translateCallableError(error) {
   switch (code) {
     case "functions/permission-denied":
       return "Você não tem permissão para essa ação.";
-
     case "functions/already-exists":
       return "Já existe um usuário com esse email.";
-
     case "functions/invalid-argument":
       return message || "Dados inválidos.";
-
     case "functions/not-found":
       return "Registro não encontrado.";
-
     case "functions/failed-precondition":
       return message || "Operação não permitida.";
-
     case "functions/unauthenticated":
       return "Faça login novamente.";
-
     case "functions/internal":
       return message || "Erro interno no servidor.";
-
     default:
       return message || "Erro desconhecido.";
   }
 }
+
 function isValidIpOrHost(value) {
   const raw = String(value || "").trim();
   if (!raw) return true;
@@ -299,7 +328,9 @@ async function loadContractNames(contractIds) {
     contractIds.map(async (id) => {
       try {
         const snap = await getDoc(doc(db, "contracts", id));
-        map[id] = snap.exists() ? (snap.data().name || formatContractId(id)) : formatContractId(id);
+        map[id] = snap.exists()
+          ? (snap.data().name || formatContractId(id))
+          : formatContractId(id);
       } catch {
         map[id] = formatContractId(id);
       }
@@ -359,7 +390,7 @@ function buildContractsChecksHtml(list, selectedContracts = []) {
     return `<p class="auth-message error">Nenhum contrato cadastrado.</p>`;
   }
 
-  return list.map(contract => `
+  return list.map((contract) => `
     <label>
       <input
         type="checkbox"
@@ -375,7 +406,7 @@ function getCheckedValues(containerId) {
   const container = $(containerId);
   if (!container) return [];
   return Array.from(container.querySelectorAll('input[type="checkbox"]:checked'))
-    .map(input => input.value);
+    .map((input) => input.value);
 }
 
 function renderAdminContractsChecks() {
@@ -402,7 +433,7 @@ function renderContractsList() {
     return;
   }
 
-  list.innerHTML = contracts.map(contract => `
+  list.innerHTML = contracts.map((contract) => `
     <div class="admin-card">
       <h5>${escapeHtml(contract.name || formatContractId(contract.id))}</h5>
       <p><strong>ID:</strong> ${escapeHtml(contract.id)}</p>
@@ -424,7 +455,7 @@ function subscribeContracts() {
   unsubscribeContracts = onSnapshot(
     q,
     (snapshot) => {
-      contracts = snapshot.docs.map(docSnap => ({
+      contracts = snapshot.docs.map((docSnap) => ({
         id: docSnap.id,
         ...docSnap.data()
       }));
@@ -433,7 +464,7 @@ function subscribeContracts() {
       renderAdminContractsChecks();
       renderEditContractsChecks(
         editingUserId
-          ? (users.find(u => u.id === editingUserId)?.contracts || [])
+          ? (users.find((u) => u.id === editingUserId)?.contracts || [])
           : []
       );
     },
@@ -442,6 +473,7 @@ function subscribeContracts() {
     }
   );
 }
+
 /* =========================================================
    PERFIL DO USUÁRIO
 ========================================================= */
@@ -515,7 +547,7 @@ function subscribeUsers() {
   unsubscribeUsers = onSnapshot(
     q,
     (snapshot) => {
-      users = snapshot.docs.map(docSnap => ({
+      users = snapshot.docs.map((docSnap) => ({
         id: docSnap.id,
         ...docSnap.data()
       }));
@@ -528,7 +560,7 @@ function subscribeUsers() {
 }
 
 function getContractName(contractId) {
-  const contract = contracts.find(item => item.id === contractId);
+  const contract = contracts.find((item) => item.id === contractId);
   return contract?.name || currentContractNameMap[contractId] || formatContractId(contractId);
 }
 
@@ -546,7 +578,7 @@ function renderUsersList() {
     return;
   }
 
-  list.innerHTML = users.map(user => {
+  list.innerHTML = users.map((user) => {
     const userContracts = Array.isArray(user.contracts) ? user.contracts : [];
 
     return `
@@ -562,7 +594,7 @@ function renderUsersList() {
         <p>
           <strong>Contratos:</strong><br>
           ${userContracts.length
-            ? userContracts.map(contractId => `
+            ? userContracts.map((contractId) => `
                 <span class="badge-inline badge-contract">
                   ${escapeHtml(getContractName(contractId))}
                 </span>
@@ -623,6 +655,7 @@ function subscribeSwitches(contractId) {
     }
   );
 }
+
 /* =========================================================
    AUTH
 ========================================================= */
@@ -753,7 +786,7 @@ function renderSwitches() {
     return;
   }
 
-  const filtered = switches.filter(sw => {
+  const filtered = switches.filter((sw) => {
     const fullText = [
       sw.name,
       sw.location,
@@ -761,7 +794,7 @@ function renderSwitches() {
       sw.ip,
       sw.obs,
       ...(Array.isArray(sw.ports)
-        ? sw.ports.map(port => `${port.number} ${port.device} ${port.status} ${port.ip} ${port.sector} ${port.obs}`)
+        ? sw.ports.map((port) => `${port.number} ${port.device} ${port.status} ${port.ip} ${port.sector} ${port.obs}`)
         : [])
     ].join(" ").toLowerCase();
 
@@ -778,9 +811,9 @@ function renderSwitches() {
     return;
   }
 
-  container.innerHTML = filtered.map(sw => {
+  container.innerHTML = filtered.map((sw) => {
     const ports = Array.isArray(sw.ports) ? sw.ports : [];
-    const usedCount = ports.filter(port => String(port.device || "").trim() !== "").length;
+    const usedCount = ports.filter((port) => String(port.device || "").trim() !== "").length;
     const switchIp = String(sw.ip || "").trim();
     const switchUrl = normalizeSwitchUrl(switchIp);
 
@@ -851,7 +884,7 @@ function updateStats() {
 
   const usedPorts = switches.reduce((acc, sw) => {
     const ports = Array.isArray(sw.ports) ? sw.ports : [];
-    return acc + ports.filter(port => String(port.device || "").trim() !== "" && port.status === "ativo").length;
+    return acc + ports.filter((port) => String(port.device || "").trim() !== "" && port.status === "ativo").length;
   }, 0);
 
   const freePorts = totalPorts - usedPorts;
@@ -867,7 +900,7 @@ function updateStats() {
 ========================================================= */
 window.toggleSwitch = function (id) {
   expandedState[id] = !expandedState[id];
-  switches = switches.map(sw => sw.id === id ? { ...sw, expanded: expandedState[id] } : sw);
+  switches = switches.map((sw) => sw.id === id ? { ...sw, expanded: expandedState[id] } : sw);
   renderSwitches();
 };
 
@@ -877,7 +910,7 @@ window.editSwitch = function (id) {
     return;
   }
 
-  const sw = switches.find(item => item.id === id);
+  const sw = switches.find((item) => item.id === id);
   if (!sw) return;
 
   switchEditingId = id;
@@ -903,7 +936,7 @@ window.deleteSwitch = async function (id) {
     return;
   }
 
-  const sw = switches.find(item => item.id === id);
+  const sw = switches.find((item) => item.id === id);
   if (!sw) return;
 
   const confirmed = confirm(`Deseja realmente excluir o switch "${sw.name}"?`);
@@ -922,7 +955,7 @@ window.openPortModal = function (switchId, portIndex) {
   editingSwitchId = switchId;
   editingPortIndex = portIndex;
 
-  const sw = switches.find(item => item.id === switchId);
+  const sw = switches.find((item) => item.id === switchId);
   if (!sw) return;
 
   const port = Array.isArray(sw.ports) ? sw.ports[portIndex] : null;
@@ -1020,7 +1053,7 @@ $("editSwitchForm")?.addEventListener("submit", async function (e) {
     return;
   }
 
-  const sw = switches.find(item => item.id === switchEditingId);
+  const sw = switches.find((item) => item.id === switchEditingId);
   if (!sw) {
     alert("Switch não encontrado.");
     return;
@@ -1070,7 +1103,7 @@ $("portForm")?.addEventListener("submit", async function (e) {
     return;
   }
 
-  const sw = switches.find(item => item.id === editingSwitchId);
+  const sw = switches.find((item) => item.id === editingSwitchId);
   if (!sw) return;
 
   const updatedPorts = Array.isArray(sw.ports) ? [...sw.ports] : [];
@@ -1324,7 +1357,7 @@ $("adminUserForm")?.addEventListener("submit", async function (e) {
   }
 
   try {
-    await fnCreateManagedUser({
+    await createManagedUserRequest({
       name,
       email,
       password,
@@ -1337,8 +1370,12 @@ $("adminUserForm")?.addEventListener("submit", async function (e) {
     renderAdminContractsChecks();
     setMessage("adminUserMessage", "Usuário criado com sucesso.", false);
   } catch (error) {
-    console.error(error);
-    setMessage("adminUserMessage", translateCallableError(error), true);
+    console.error("Erro ao criar usuário:", error);
+    setMessage(
+      "adminUserMessage",
+      error?.message || "Erro ao criar usuário.",
+      true
+    );
   }
 });
 
@@ -1348,7 +1385,7 @@ window.openEditUserModal = function (userId) {
     return;
   }
 
-  const user = users.find(item => item.id === userId);
+  const user = users.find((item) => item.id === userId);
   if (!user) return;
 
   editingUserId = userId;
@@ -1445,7 +1482,7 @@ window.removeUser = async function (userId) {
     return;
   }
 
-  const user = users.find(item => item.id === userId);
+  const user = users.find((item) => item.id === userId);
   if (!user) return;
 
   const confirmed = confirm(`Deseja realmente excluir o usuário "${user.name}"?`);
