@@ -52,40 +52,40 @@ const fnUpdateManagedUser = httpsCallable(functions, "updateManagedUser");
 const fnDeleteManagedUser = httpsCallable(functions, "deleteManagedUser");
 const fnResetManagedUserPassword = httpsCallable(functions, "resetManagedUserPassword");
 
-async function createManagedUserRequest(payload) {
+async function createManagedUserRequest(data) {
   const user = auth.currentUser;
 
   if (!user) {
     throw new Error("Usuário não autenticado.");
   }
 
-  const idToken = await user.getIdToken(true);
+  const token = await user.getIdToken(true);
 
-  const response = await fetch(
+  const res = await fetch(
     "https://southamerica-east1-switchs-f8ca3.cloudfunctions.net/createManagedUser",
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${idToken}`
+        "Authorization": `Bearer ${token}`
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(data)
     }
   );
 
-  let result = null;
+  let json = null;
 
   try {
-    result = await response.json();
+    json = await res.json();
   } catch {
-    result = null;
+    json = null;
   }
 
-  if (!response.ok) {
-    throw new Error(result?.error || "Erro ao criar usuário.");
+  if (!res.ok) {
+    throw new Error(json?.error || "Erro ao criar usuário.");
   }
 
-  return result;
+  return json;
 }
 
 /* =========================================================
