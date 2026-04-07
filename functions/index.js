@@ -1,4 +1,4 @@
-const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const admin = require("firebase-admin");
 
 if (!admin.apps.length) {
@@ -103,91 +103,198 @@ function toHttpsError(error, fallbackMessage) {
 /* =========================================================
    CREATE USER
 ========================================================= */
-exports.createManagedUser = onCall(
+exports.createManagedUser = onRequest(
   {
-    region: "southamerica-east1",
-    cors: [
-      "https://luan-nogueira.github.io",
-      /https:\/\/luan-nogueira\.github\.io$/
-    ]
+    region: "southamerica-east1"
   },
-  async (request) => {
-    await ensureAdmin(request.auth);
+  async (req, res) => {
+    const allowedOrigins = [
+      "https://luan-nogueira.github.io",
+      "http://127.0.0.1:5500",
+      "http://localhost:5500",
+      "http://localhost:5173",
+      "http://127.0.0.1:5173"
+    ];
 
-    const data = request.data || {};
-    const name = String(data.name || "").trim();
-    const email = String(data.email || "").trim().toLowerCase();
-    const password = String(data.password || "");
-    const isAdmin = data.isAdmin === true;
-    const mustChangePassword = data.mustChangePassword === true;
-    const contracts = normalizeContracts(data.contracts);
+    const origin = req.headers.origin || "";
 
-    if (!name || !email || !password) {
-      throw new HttpsError("invalid-argument", "Nome, email e senha são obrigatórios.");
+    if (allowedOrigins.includes(origin)) {
+      res.set("Access-Control-Allow-Origin", origin);
     }
 
-    if (password.length < 6) {
-      throw new HttpsError("invalid-argument", "A senha deve ter pelo menos 6 caracteres.");
+    res.set("Vary", "Origin");
+    res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
+    res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.set("Access-Control-Max-Age", "3600");
+
+    if (req.method === "OPTIONS") {
+      return res.status(204).send("");
     }
 
-    if (!contracts.length) {
-      throw new HttpsError("invalid-argument", "Selecione ao menos um contrato.");
+    if (req.method !== "POST") {
+      return res.status(405).json({
+        ok: false,
+        error: "Método não permitido."
+      });
     }
-
-    let userRecord = null;
 
     try {
+      const authHeader = req.headers.authorization || "";
+
+      if (!authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({
+          ok: false,
+          error: "Token de autenticação não enviado."
+        });
+      }
+
+      const idToken = authHeader.split("Bearer ")[1]?.trim();
+
+      if (!idToken) {
+        return res.status(401).json({
+          ok: false,
+          error: "Token de autenticação inválido."
+        });
+      }
+
+      const decodedToken = await admin.auth().verifyIdToken(idToken);
+      await ensureAdmin(decodedToken);
+
+      const data = req.body || {};
+      const name = String(data.name || "").trim();
+      const email = String(data.email || "").trim().toLowerCase();
+      const password = String(data.password || "");
+      const isAdmin = data.isAdmin === true;
+      const mustChangePassword = data.mustChangePassword === true;
+      const contracts = normalizeContracts(data.contracts);
+
+      if (!name || !email || !password) {
+        return res.status(400).json({
+          ok: false,
+          error: "Nome, email e senha são obrigatórios."
+        });
+      }
+
+      if (password.length < 6) {
+        return res.status(400).json({
+          ok: false,
+          error: "A senha deve ter pelo menos 6 caracteres."
+        });
+      }
+
+      if (!contracts.length) {
+        return res.status(400).json({
+          ok: false,
+          error: "Selecione ao menos um contrato."
+        });
+      }
+
+      let userRecord = null;
+
       try {
-        const existingUser = await admin.auth().getUserByEmail(email);
-        if (existingUser) {
-          throw new HttpsError("already-exists", "Já existe um usuário com esse email.");
-        }
-      } catch (checkError) {
-        if (checkError instanceof HttpsError) throw checkError;
-        if (checkError?.code !== "auth/user-not-found") throw checkError;
-      }
-
-      userRecord = await admin.auth().createUser({
-        email,
-        password,
-        displayName: name
-      });
-
-      await db.collection("users").doc(userRecord.uid).set({
-        name,
-        email,
-        isAdmin,
-        contracts,
-        mustChangePassword,
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
-
-      return {
-        ok: true,
-        uid: userRecord.uid,
-        message: "Usuário criado com sucesso."
-      };
-    } catch (error) {
-      console.error("Falha ao criar usuário:", {
-        code: error?.code,
-        message: error?.message,
-        stack: error?.stack
-      });
-
-      if (userRecord?.uid) {
         try {
-          await admin.auth().deleteUser(userRecord.uid);
-        } catch (rollbackError) {
-          console.error("Falha no rollback do usuário:", rollbackError);
+          const existingUser = await admin.auth().getUserByEmail(email);
+
+          if (existingUser) {
+            return res.status(409).json({
+              ok: false,
+              error: "Já existe um usuário com esse email."
+            });
+          }
+        } catch (checkError) {
+          if (checkError?.code !== "auth/user-not-found") {
+            throw checkError;
+          }
         }
+
+        userRecord = await admin.auth().createUser({
+          email,
+          password,
+          displayName: name
+        });
+
+        await db.collection("users").doc(userRecord.uid).set({
+          name,
+          email,
+          isAdmin,
+          contracts,
+          mustChangePassword,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp()
+        });
+
+        return res.status(200).json({
+          ok: true,
+          uid: userRecord.uid,
+          message: "Usuário criado com sucesso."
+        });
+      } catch (error) {
+        console.error("Falha ao criar usuário:", {
+          code: error?.code,
+          message: error?.message,
+          stack: error?.stack
+        });
+
+        if (userRecord?.uid) {
+          try {
+            await admin.auth().deleteUser(userRecord.uid);
+          } catch (rollbackError) {
+            console.error("Falha no rollback do usuário:", rollbackError);
+          }
+        }
+
+        if (error?.code === "auth/email-already-exists") {
+          return res.status(409).json({
+            ok: false,
+            error: "Já existe um usuário com esse email."
+          });
+        }
+
+        if (error?.code === "auth/invalid-email") {
+          return res.status(400).json({
+            ok: false,
+            error: "Email inválido."
+          });
+        }
+
+        if (error?.code === "auth/invalid-password") {
+          return res.status(400).json({
+            ok: false,
+            error: "Senha inválida."
+          });
+        }
+
+        return res.status(500).json({
+          ok: false,
+          error: error?.message || "Erro ao criar usuário."
+        });
+      }
+    } catch (error) {
+      console.error("Erro geral createManagedUser:", error);
+
+      if (error instanceof HttpsError) {
+        const statusMap = {
+          unauthenticated: 401,
+          "permission-denied": 403,
+          "invalid-argument": 400,
+          "already-exists": 409,
+          "failed-precondition": 400,
+          "not-found": 404
+        };
+
+        return res.status(statusMap[error.code] || 500).json({
+          ok: false,
+          error: error.message || "Erro na requisição."
+        });
       }
 
-      toHttpsError(error, "Erro ao criar usuário.");
+      return res.status(500).json({
+        ok: false,
+        error: error?.message || "Erro interno no servidor."
+      });
     }
   }
 );
-
 /* =========================================================
    UPDATE USER
 ========================================================= */
