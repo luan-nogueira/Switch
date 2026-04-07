@@ -101,7 +101,7 @@ function toHttpsError(error, fallbackMessage) {
 }
 
 /* =========================================================
-   CREATE USER
+   CREATE USER - ONREQUEST COM CORS MANUAL
 ========================================================= */
 exports.createManagedUser = onRequest(
   {
@@ -112,8 +112,8 @@ exports.createManagedUser = onRequest(
       "https://luan-nogueira.github.io",
       "http://127.0.0.1:5500",
       "http://localhost:5500",
-      "http://localhost:5173",
-      "http://127.0.0.1:5173"
+      "http://127.0.0.1:5173",
+      "http://localhost:5173"
     ];
 
     const origin = req.headers.origin || "";
@@ -295,6 +295,7 @@ exports.createManagedUser = onRequest(
     }
   }
 );
+
 /* =========================================================
    UPDATE USER
 ========================================================= */
