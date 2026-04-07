@@ -106,7 +106,10 @@ function toHttpsError(error, fallbackMessage) {
 exports.createManagedUser = onCall(
   {
     region: "southamerica-east1",
-    cors: true
+    cors: [
+      "https://luan-nogueira.github.io",
+      /https:\/\/luan-nogueira\.github\.io$/
+    ]
   },
   async (request) => {
     await ensureAdmin(request.auth);
@@ -120,24 +123,15 @@ exports.createManagedUser = onCall(
     const contracts = normalizeContracts(data.contracts);
 
     if (!name || !email || !password) {
-      throw new HttpsError(
-        "invalid-argument",
-        "Nome, email e senha são obrigatórios."
-      );
+      throw new HttpsError("invalid-argument", "Nome, email e senha são obrigatórios.");
     }
 
     if (password.length < 6) {
-      throw new HttpsError(
-        "invalid-argument",
-        "A senha deve ter pelo menos 6 caracteres."
-      );
+      throw new HttpsError("invalid-argument", "A senha deve ter pelo menos 6 caracteres.");
     }
 
     if (!contracts.length) {
-      throw new HttpsError(
-        "invalid-argument",
-        "Selecione ao menos um contrato."
-      );
+      throw new HttpsError("invalid-argument", "Selecione ao menos um contrato.");
     }
 
     let userRecord = null;
@@ -145,21 +139,12 @@ exports.createManagedUser = onCall(
     try {
       try {
         const existingUser = await admin.auth().getUserByEmail(email);
-
         if (existingUser) {
-          throw new HttpsError(
-            "already-exists",
-            "Já existe um usuário com esse email."
-          );
+          throw new HttpsError("already-exists", "Já existe um usuário com esse email.");
         }
       } catch (checkError) {
-        if (checkError instanceof HttpsError) {
-          throw checkError;
-        }
-
-        if (checkError?.code !== "auth/user-not-found") {
-          throw checkError;
-        }
+        if (checkError instanceof HttpsError) throw checkError;
+        if (checkError?.code !== "auth/user-not-found") throw checkError;
       }
 
       userRecord = await admin.auth().createUser({
