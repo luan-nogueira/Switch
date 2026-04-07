@@ -47,12 +47,20 @@ async function ensureAdmin(auth) {
 }
 
 function toHttpsError(error, fallbackMessage) {
-  const code = error?.code || "";
-  const message = error?.message || fallbackMessage || "Erro interno.";
-
   if (error instanceof HttpsError) {
     throw error;
   }
+
+  const code = error?.code || "";
+  const rawMessage = error?.message || "";
+  const message = rawMessage || fallbackMessage || "Erro interno.";
+
+  console.error("ERRO INTERNO DETALHADO:", {
+    code,
+    message: rawMessage,
+    stack: error?.stack,
+    fullError: error
+  });
 
   if (code === "auth/email-already-exists") {
     throw new HttpsError("already-exists", "Já existe um usuário com esse email.");
@@ -70,19 +78,23 @@ function toHttpsError(error, fallbackMessage) {
     throw new HttpsError("invalid-argument", "Senha inválida.");
   }
 
-  console.error("ERRO INTERNO:", error);
-  throw new HttpsError("internal", message);
+  if (code === "auth/operation-not-allowed") {
+    throw new HttpsError("failed-precondition", "O provedor Email/Senha não está habilitado no Firebase Authentication.");
+  }
+
+  if (code === "auth/insufficient-permission") {
+    throw new HttpsError("permission-denied", "A Cloud Function não tem permissão suficiente para criar usuários.");
+  }
+
+  throw new HttpsError("internal", `Erro interno: ${message}`);
 }
 
 exports.createManagedUser = onCall(
-  {
-    region: "southamerica-east1"
-  },
+  { region: "southamerica-east1" },
   async (request) => {
     await ensureAdmin(request.auth);
 
     const data = request.data || {};
-
     const name = String(data.name || "").trim();
     const email = String(data.email || "").trim().toLowerCase();
     const password = String(data.password || "");
@@ -127,6 +139,12 @@ exports.createManagedUser = onCall(
         message: "Usuário criado com sucesso."
       };
     } catch (error) {
+      console.error("Falha ao criar usuário:", {
+        code: error?.code,
+        message: error?.message,
+        stack: error?.stack
+      });
+
       if (userRecord?.uid) {
         try {
           await admin.auth().deleteUser(userRecord.uid);
